@@ -33,3 +33,5 @@ Proof: ssh -L 26768:127.0.0.1:16768 hostkey, then Mac paseo 0.6.1 --host 127.0.0
 Product path: Mac paseo --host plus connector-owned SSH forwards (or on-demand mux). Not docker exec. Not a new connector per cell. SSH down = all remotes dark. Permission cards still break blocking send — v1 send stays --no-wait.
 
 Daniel 2026-08-27: the app must maintain a registry of paseo tenants. Seed the seven known cells. New Paseo = a row. Connector-owned SSH mux; no standing LocalForward in ~/.ssh/config.
+
+Company docket TASK-0031 (In Progress, assigned PrimDesktop) cites this card. Execution stays here.
