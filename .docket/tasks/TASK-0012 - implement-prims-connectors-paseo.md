@@ -1,7 +1,7 @@
 ---
 id: TASK-0012
 title: Implement prims-connectors-paseo
-status: To Do
+status: In Progress
 created: '2026-08-27'
 priority: high
 milestone: MS-0001
@@ -31,3 +31,5 @@ Laptop :6767 already answers locally. All six remote cells /api/health 200 on ho
 Proof: ssh -L 26768:127.0.0.1:16768 hostkey, then Mac paseo 0.6.1 --host 127.0.0.1:26768 listed GMW agents and inspected 102adae1 (idle, claude, /workspace/greenmark-cockpit). Tunnel torn down after. Version skew 0.6.1 CLI → 0.5.1 daemon is fine for ls/inspect. Did not fire send.
 
 Product path: Mac paseo --host plus connector-owned SSH forwards (or on-demand mux). Not docker exec. Not a new connector per cell. SSH down = all remotes dark. Permission cards still break blocking send — v1 send stays --no-wait.
+
+Daniel 2026-08-27: the app must maintain a registry of paseo tenants. Seed the seven known cells. New Paseo = a row. Connector-owned SSH mux; no standing LocalForward in ~/.ssh/config.
