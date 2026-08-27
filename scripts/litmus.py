@@ -1031,10 +1031,11 @@ def check_tcc_identity() -> None:
             and "LaunchServices" in note
             and "XPC" in note
             and "posix_spawn" in note
+            and "in-app Messages" in note
         ):
             ok("tcc_model_written")
         else:
-            fail("tcc_model_written", "scripts/TCC.md must say LS app is type 0; shell-exec Prim is type 1; PATH is XPC")
+            fail("tcc_model_written", "scripts/TCC.md must say LS app is type 0; shell-exec Prim is type 1; PATH is XPC; FDA prove is in-app Messages")
     else:
         fail("tcc_model_written", "missing scripts/TCC.md")
 
@@ -1070,7 +1071,7 @@ def check_tcc_identity() -> None:
         (CHATDB_HELPER, "chatdb_helper_identifier_sh_prims_desktop"),
     ):
         if not helper.is_file():
-            skip(cid, f"{helper.name} not installed (PATH must still be MacOS/Prim)")
+            skip(cid, f"{helper.name} not installed (PATH is the XPC client helper)")
             continue
         blob = codesign_blob(helper)
         ident = codesign_field(blob, "Identifier")
@@ -1081,51 +1082,24 @@ def check_tcc_identity() -> None:
         else:
             fail(cid, ident or blob.replace("\n", " ")[:160])
 
-    pipe = run(["prims-desktop", "--json", "doctor"], timeout=45)
-    pipe_doc: dict = {}
-    if not pipe.stdout.strip():
-        fail(
-            "doctor_json_on_pipe",
-            f"empty stdout exit={pipe.returncode} — fflush before _exit; do not require a TTY",
-        )
-    else:
-        try:
-            loaded = json.loads(pipe.stdout)
-            if isinstance(loaded, dict):
-                pipe_doc = loaded
-            ok("doctor_json_on_pipe", f"exit={pipe.returncode}")
-        except json.JSONDecodeError:
-            fail("doctor_json_on_pipe", f"not JSON: {pipe.stdout[:160]}")
-
-    try:
-        doctor = pipe_doc if pipe_doc else cli_json(["doctor"])
-    except Exception as e:
-        fail("doctor_chatdb_inherits_app_fda", f"cannot run doctor: {e}")
-        return
-    running = str(doctor.get("running") or "")
-    principal = str(doctor.get("principal") or "")
-    ident = str(doctor.get("principal_identifier") or "")
-    dr = str(doctor.get("principal_designated_requirement") or "")
-    helper_ident = str(doctor.get("helper_identifier") or "")
-    helper_dr = str(doctor.get("helper_designated_requirement") or "")
-    reader = str(doctor.get("tcc_reader") or "")
-    is_app = reader == "app" and APP_EXEC_SNIP in running and ident == BUNDLE_ID
-    readable = doctor.get("chat_db_readable")
-    if not is_app:
-        fail(
-            "doctor_chatdb_inherits_app_fda",
-            "reader is not the LS-launched app "
-            f"tcc_reader={reader} running={running} Identifier={ident or helper_ident} DR={dr or helper_dr} "
-            "— do not skip as FDA not granted; do not grant FDA to a helper; "
-            "do not exec MacOS/Prim from a shell",
-        )
-    elif readable is True:
-        ok("doctor_chatdb_inherits_app_fda")
+    # FDA prove is the in-app Messages stage (Connected / first rows), not
+    # piped `prims-desktop doctor --json` chat_db_readable.
+    stage = (ROOT / "Sources" / "PrimMac" / "UI" / "StageView.swift").read_text()
+    settings = (ROOT / "Sources" / "PrimMac" / "UI" / "DeskSettings.swift").read_text()
+    desk = (ROOT / "Sources" / "PrimMac" / "DeskModel.swift").read_text()
+    if (
+        "MessageTranscript" in stage
+        and "ChatDB.health()" in stage
+        and "iMessage is connected" in stage
+        and 'ChatDB.health() ? "Connected"' in settings
+        and "ChatDB.receive" in desk
+        and "sqlite3_open" not in client_src
+    ):
+        ok("fda_prove_is_in_app_messages")
     else:
         fail(
-            "doctor_chatdb_inherits_app_fda",
-            f"chat_db_readable={readable} tcc_reader={reader} running={running} Identifier={ident} DR={dr} "
-            f"helper Identifier={helper_ident} helper DR={helper_dr}",
+            "fda_prove_is_in_app_messages",
+            "FDA prove must be StageView/DeskSettings Messages in the app process",
         )
 
 

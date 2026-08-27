@@ -484,6 +484,44 @@ final class HostTests: XCTestCase {
         XCTAssertTrue(tcc.contains("LaunchServices"))
         XCTAssertTrue(tcc.contains("XPC"))
         XCTAssertTrue(tcc.contains("client_type"))
+        XCTAssertTrue(tcc.contains("in-app Messages"))
+    }
+
+    func testFDAProveIsInAppMessagesNotPipedDoctor() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let stage = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/UI/StageView.swift"),
+            encoding: .utf8
+        )
+        let settings = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/UI/DeskSettings.swift"),
+            encoding: .utf8
+        )
+        let desk = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/DeskModel.swift"),
+            encoding: .utf8
+        )
+        let client = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimsDesktopCLI/main.swift"),
+            encoding: .utf8
+        )
+        let litmus = try String(
+            contentsOf: root.appendingPathComponent("scripts/litmus.py"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(stage.contains("MessageTranscript"))
+        XCTAssertTrue(stage.contains("ChatDB.health()"))
+        XCTAssertTrue(stage.contains("iMessage is connected"))
+        XCTAssertTrue(settings.contains("ChatDB.health() ? \"Connected\""))
+        XCTAssertTrue(desk.contains("ChatDB.receive"))
+        XCTAssertFalse(client.contains("sqlite3_open"))
+        XCTAssertFalse(client.contains("ChatDB"))
+        XCTAssertFalse(litmus.contains("doctor_chatdb_inherits_app_fda"))
+        XCTAssertFalse(litmus.contains("doctor_json_on_pipe"))
+        XCTAssertTrue(litmus.contains("fda_prove_is_in_app_messages"))
     }
 
     func testSourcesDoNotAskFDAForLooseCLI() throws {

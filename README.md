@@ -20,6 +20,8 @@ Signed `Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM)`.
 
 Prims Desktop needs Full Disk Access to read Messages on this Mac.
 
+FDA prove: open `/Applications/Prims Desktop.app` and confirm Messages **Connected** / first rows. Piped `prims-desktop doctor` is not the gate.
+
 ```bash
 ./scripts/prove.sh
 ./scripts/build.sh

@@ -6,7 +6,7 @@ ROOT="$(realpath "$ROOT")"
 cd "$ROOT"
 export PATH="$HOME/.local/bin:$HOME/.asmp/bin:$PATH"
 
-# Process-entry + XPC source lock. A VM can prove this; chat.db readable is the Mac prove.
+# Process-entry + XPC source lock. FDA prove is in-app Messages, not piped doctor.
 python3 - <<'PY'
 from pathlib import Path
 root = Path(".").resolve()
@@ -38,6 +38,10 @@ if "isLaunchServicesAppProcess" not in chatdb:
 tcc = (root / "scripts/TCC.md").read_text()
 if "LaunchServices" not in tcc or "XPC" not in tcc or "posix_spawn" not in tcc:
     raise SystemExit("TCC.md must lock LS type 0 / shell-exec type 1 / PATH is XPC")
+if "in-app Messages" not in tcc:
+    raise SystemExit("TCC.md must say FDA prove is the in-app Messages path")
+if "doctor_chatdb_inherits_app_fda" in (root / "scripts/litmus.py").read_text():
+    raise SystemExit("litmus must not treat piped doctor chat_db_readable as the FDA gate")
 build = (root / "scripts/build.sh").read_text().replace("\\\n", " ")
 if ".app.bak" in build:
     raise SystemExit("build.sh still mints bak apps")
@@ -102,7 +106,8 @@ if [[ -d ../prim-sim ]]; then
     --filter HostTests.testProcessEntryRoutesEveryDesktopCLIVerb \
     --filter HostTests.testCLIEntryIsProcessMainNotSwiftUIInit \
     --filter HostTests.testBuildScriptDoesNotDeepStompIdentifiers \
-    --filter HostTests.testTrampolineAndInstallCLIExecAppExecutable
+    --filter HostTests.testTrampolineAndInstallCLIExecAppExecutable \
+    --filter HostTests.testFDAProveIsInAppMessagesNotPipedDoctor
 else
   echo "skip swift test (../prim-sim missing)"
 fi
