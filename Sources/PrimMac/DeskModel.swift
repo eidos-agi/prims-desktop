@@ -51,6 +51,12 @@ final class DeskModel: ObservableObject {
     func didSelect(_ name: String?) {
         selected = name
         persistSelection()
+        if let name {
+            DayLog.event("sidebar.select", name)
+            if connectors.contains(where: { $0.name == name }) {
+                DayLog.event("connector.select", name)
+            }
+        }
         guard let name, let tool = connectors.first(where: { $0.name == name }) else {
             chat = nil
             return
@@ -74,16 +80,24 @@ final class DeskModel: ObservableObject {
     /// Toolbar gear. FDA sheet wins — do not stack Settings on top of it.
     func showSettings() {
         guard !askFDA else { return }
+        DayLog.event("settings.open")
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
+    /// Second window of this process. Not a sheet.
+    func showDebug() {
+        DebugSession.shared.show()
     }
 
     func toggleRailHidden() {
         railHidden.toggle()
+        DayLog.event("sidebar.visibility", railHidden ? "hidden" : "shown")
     }
 
     func toggleRailIcons() {
         railIcons.toggle()
         if railIcons { railHidden = false }
+        DayLog.event("sidebar.icons", railIcons ? "collapsed" : "expanded")
     }
 
     private func persistSelection() {

@@ -48,7 +48,8 @@ if [[ -d ../prim-sim ]]; then
     --filter HostTests.testASMPConnectorManifestIsAServiceNotAPackType \
     --filter HostTests.testProductIdentityIsLocked \
     --filter HostTests.testInfoPlistAndPPPCAreBound \
-    --filter HostTests.testSourcesDoNotAskFDAForLooseCLI
+    --filter HostTests.testSourcesDoNotAskFDAForLooseCLI \
+    --filter HostTests.testDayLogAppendsLineToDayFile
 else
   echo "skip swift test (../prim-sim missing)"
 fi

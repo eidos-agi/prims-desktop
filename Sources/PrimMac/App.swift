@@ -1,4 +1,5 @@
 import AppKit
+import PrimMacCore
 import SwiftUI
 
 @main
@@ -49,7 +50,9 @@ final class DeskAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        DayLog.event("window.open", "main")
         for window in NSApp.windows where window.canBecomeMain {
+            if window.identifier?.rawValue == DebugSession.identifier { continue }
             window.title = "Prims Desktop"
             window.makeKeyAndOrderFront(nil)
         }

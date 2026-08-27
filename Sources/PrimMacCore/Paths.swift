@@ -41,4 +41,13 @@ public enum Paths {
         }
         return home().appendingPathComponent("repos-eidos-agi/prims-desktop/asmp.yaml")
     }
+
+    /// Durable debug day files. Override with `PRIM_DEBUG_LOG_DIR` (tests).
+    /// Never rotate or delete; each calendar day is a new file.
+    public static func debugLogs() -> URL {
+        if let env = ProcessInfo.processInfo.environment["PRIM_DEBUG_LOG_DIR"], !env.isEmpty {
+            return URL(fileURLWithPath: env)
+        }
+        return home().appendingPathComponent("Library/Logs/Prims Desktop")
+    }
 }
