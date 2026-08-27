@@ -1,0 +1,157 @@
+{
+  "format": "opf",
+  "version": "1.0",
+  "product": "opf:prims-desktop:product",
+  "entities": [
+    {
+      "id": "opf:prims-desktop:product",
+      "type": "product",
+      "title": "Prims Desktop",
+      "status": "building",
+      "provenance": {
+        "by": "human:daniel",
+        "method": "product design thread, 2026-08-27"
+      },
+      "description": "Local-first macOS Prims environment. Product decisions are recorded in this prim.product graph.",
+      "content": "index.md"
+    },
+    {
+      "id": "opf:prims-desktop:area:profiles-storage",
+      "type": "area",
+      "title": "Profiles and storage",
+      "status": "active",
+      "provenance": {
+        "by": "human:daniel",
+        "method": "product design thread, 2026-08-27"
+      }
+    },
+    {
+      "id": "opf:prims-desktop:decision:multiple-profiles",
+      "type": "decision",
+      "title": "One Prims Desktop installation can use multiple Prims profiles",
+      "status": "active",
+      "provenance": {
+        "by": "human:daniel",
+        "method": "stated directly in product design thread, 2026-08-27"
+      },
+      "description": "A person can have different Prims profiles rather than one global Prims environment."
+    },
+    {
+      "id": "opf:prims-desktop:decision:bootstrap-pointer",
+      "type": "decision",
+      "title": "A setup file under ~/prims points to the profile's default Prims folder",
+      "status": "active",
+      "provenance": {
+        "by": "human:daniel",
+        "method": "stated directly in product design thread, 2026-08-27"
+      },
+      "description": "Prims Desktop keeps a small machine-local setup/bootstrap file under ~/prims. It points to the default Prims folder for the selected profile instead of making the app installation itself the data store."
+    },
+    {
+      "id": "opf:prims-desktop:decision:profile-root",
+      "type": "decision",
+      "title": "Each profile owns its own folder on a drive",
+      "status": "active",
+      "provenance": {
+        "by": "human:daniel",
+        "method": "stated directly in product design thread, 2026-08-27"
+      },
+      "description": "Each Prims profile has its own filesystem folder, and that folder stores all settings and Prims for that profile. Different profiles may point to different folders or drives."
+    },
+    {
+      "id": "opf:prims-desktop:outcome:profile-worlds",
+      "type": "outcome",
+      "title": "Profiles are separate Prims worlds",
+      "status": "active",
+      "provenance": {
+        "by": "agent:chatgpt",
+        "method": "direct implication of Daniel's stamped profile/storage decisions"
+      },
+      "description": "Switching profiles changes the profile-specific settings and Prims because those live under the selected profile root."
+    },
+    {
+      "id": "opf:prims-desktop:gap:bootstrap-schema",
+      "type": "gap",
+      "title": "Exact ~/prims bootstrap filename and schema are not yet locked",
+      "status": "open",
+      "provenance": {
+        "by": "agent:chatgpt",
+        "method": "not specified in Daniel's 2026-08-27 profile decision"
+      },
+      "description": "The product decision establishes the bootstrap location and role, but not its exact filename, encoding, or serialized schema."
+    }
+  ],
+  "relationships": [
+    {
+      "id": "opf:prims-desktop:rel:product-profiles-storage",
+      "type": "contains",
+      "from": "opf:prims-desktop:product",
+      "to": "opf:prims-desktop:area:profiles-storage",
+      "order": 0
+    },
+    {
+      "id": "opf:prims-desktop:rel:profiles-multiple",
+      "type": "contains",
+      "from": "opf:prims-desktop:area:profiles-storage",
+      "to": "opf:prims-desktop:decision:multiple-profiles",
+      "order": 0
+    },
+    {
+      "id": "opf:prims-desktop:rel:profiles-bootstrap",
+      "type": "contains",
+      "from": "opf:prims-desktop:area:profiles-storage",
+      "to": "opf:prims-desktop:decision:bootstrap-pointer",
+      "order": 1
+    },
+    {
+      "id": "opf:prims-desktop:rel:profiles-root",
+      "type": "contains",
+      "from": "opf:prims-desktop:area:profiles-storage",
+      "to": "opf:prims-desktop:decision:profile-root",
+      "order": 2
+    },
+    {
+      "id": "opf:prims-desktop:rel:profiles-outcome",
+      "type": "contains",
+      "from": "opf:prims-desktop:area:profiles-storage",
+      "to": "opf:prims-desktop:outcome:profile-worlds",
+      "order": 3
+    },
+    {
+      "id": "opf:prims-desktop:rel:profiles-gap",
+      "type": "contains",
+      "from": "opf:prims-desktop:area:profiles-storage",
+      "to": "opf:prims-desktop:gap:bootstrap-schema",
+      "order": 4
+    },
+    {
+      "id": "opf:prims-desktop:rel:product-expresses-profile-root",
+      "type": "expresses",
+      "from": "opf:prims-desktop:product",
+      "to": "opf:prims-desktop:decision:profile-root"
+    }
+  ],
+  "events": [
+    {
+      "id": "opf:prims-desktop:event:prim-product-created",
+      "type": "created",
+      "at": "2026-08-27T18:24:00Z",
+      "subjects": [
+        "opf:prims-desktop:product",
+        "opf:prims-desktop:area:profiles-storage"
+      ],
+      "detail": "Created Prims Desktop prim.product pack and recorded the stamped profiles/storage model."
+    },
+    {
+      "id": "opf:prims-desktop:event:profile-model-stamped",
+      "type": "decided",
+      "at": "2026-08-27T18:24:00Z",
+      "subjects": [
+        "opf:prims-desktop:decision:multiple-profiles",
+        "opf:prims-desktop:decision:bootstrap-pointer",
+        "opf:prims-desktop:decision:profile-root"
+      ],
+      "detail": "Daniel stamped multiple profiles, a ~/prims bootstrap pointer, and one filesystem root per profile containing that profile's settings and Prims."
+    }
+  ]
+}
