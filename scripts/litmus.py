@@ -25,9 +25,13 @@ ASKED_DIR = "prims-desktop"
 ASKED_APP = Path("/Applications") / "Prims Desktop.app"
 OLD_APP = HOME / "Applications" / "Prim.app"
 OLD_USER_APP = HOME / "Applications" / "Prims Desktop.app"
+APP_BIN = ASKED_APP / "Contents" / "MacOS" / "Prim"
 HELPER = ASKED_APP / "Contents" / "Helpers" / "prims-desktop"
 CHATDB_HELPER = ASKED_APP / "Contents" / "Helpers" / "imessage-chatdb-receive"
 TRAMPOLINE = HOME / ".local" / "bin" / "prims-desktop"
+TRAMPOLINE_SRC = ROOT / "scripts" / "prims-desktop-trampoline.sh"
+APP_EXEC_SNIP = "/Applications/Prims Desktop.app/Contents/MacOS/Prim"
+HELPER_EXEC_SNIP = "/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"
 TEAM = "Y6CQ4SWPWM"
 FDA_NOTE = "Prims Desktop needs Full Disk Access to read Messages on this Mac."
 OLD_CLI_FDA = "Grant Full Disk Access to prims-desktop (~/.local/bin/prims-desktop)"
@@ -137,11 +141,18 @@ def check_source_identity() -> None:
         else:
             fail("pppc_mobileconfig", "CodeRequirement is not a fill-from-codesign-dr placeholder")
 
-    tramp = (ROOT / "scripts" / "prims-desktop-trampoline.sh").read_text()
-    if "exec " in tramp and str(HELPER) in tramp and "chat.db" not in tramp and "ChatDB" not in tramp and "sqlite" not in tramp:
+    tramp = TRAMPOLINE_SRC.read_text()
+    if (
+        "exec " in tramp
+        and APP_EXEC_SNIP in tramp
+        and HELPER_EXEC_SNIP not in tramp
+        and "chat.db" not in tramp
+        and "ChatDB" not in tramp
+        and "sqlite" not in tramp
+    ):
         ok("trampoline_source_no_chatdb")
     else:
-        fail("trampoline_source_no_chatdb", "trampoline must exec the helper and not read chat.db")
+        fail("trampoline_source_no_chatdb", "trampoline must exec MacOS/Prim and not read chat.db")
 
     old_hits: list[str] = []
     exact_ok = False
@@ -211,7 +222,7 @@ def check_identity() -> None:
 
 
 def check_asked() -> None:
-    help_txt = run(["prims-desktop"]).stdout
+    help_txt = run(["prims-desktop", "--help"]).stdout
     if re.search(r"^\s+prims-desktop asmp\s*$", help_txt, re.M):
         ok("cli_has_asmp_verb")
     else:
@@ -453,12 +464,13 @@ def check_pro() -> None:
     tramp = run(["which", "prims-desktop"]).stdout.strip()
     if tramp:
         kind = run(["file", tramp]).stdout
+        body = Path(tramp).read_text(errors="replace")
         if "Mach-O" in kind:
             fail("path_cli_is_trampoline", f"{tramp} is a Mach-O TCC principal; want a trampoline script")
-        elif "exec " in Path(tramp).read_text(errors="replace") and "Helpers/prims-desktop" in Path(tramp).read_text(errors="replace"):
+        elif "exec " in body and APP_EXEC_SNIP in body and HELPER_EXEC_SNIP not in body:
             ok("path_cli_is_trampoline", tramp)
         else:
-            fail("path_cli_is_trampoline", f"{tramp} does not exec the in-bundle helper")
+            fail("path_cli_is_trampoline", f"{tramp} must exec {APP_EXEC_SNIP}")
 
     readme = (ROOT / "README.md").read_text()
     if "github.com/eidos-agi/prims-desktop" in readme and "~/repos-eidos-agi/prims-desktop" in readme:
@@ -698,10 +710,13 @@ def check_deep() -> None:
         fail("cli_compat_symlink", f"{link} -> {link.resolve() if link.exists() else 'missing'}")
 
     serve = run(["pgrep", "-f", "prims-desktop asmp serve"])
+    serve_prim = run(["pgrep", "-f", "Contents/MacOS/Prim asmp serve"])
     if serve.returncode == 0 and serve.stdout.strip():
         ok("health_serve_process_alive", serve.stdout.splitlines()[0])
+    elif serve_prim.returncode == 0 and serve_prim.stdout.strip():
+        ok("health_serve_process_alive", serve_prim.stdout.splitlines()[0])
     else:
-        fail("health_serve_process_alive", "no prims-desktop asmp serve; health will go stale")
+        fail("health_serve_process_alive", "no MacOS/Prim asmp serve; health will go stale")
 
     try:
         hj = http_json(HEALTH)
@@ -728,7 +743,10 @@ def check_deep() -> None:
 
     try:
         doctor = cli_json(["doctor"])
-        need_d = {"overlay", "app", "cli", "asmp", "chat_db", "fda", "helper", "cli_is_trampoline"}
+        need_d = {
+            "overlay", "app", "cli", "asmp", "chat_db", "fda", "helper",
+            "cli_is_trampoline", "principal", "running",
+        }
         if need_d <= set(doctor):
             ok("doctor_json_schema")
         else:
@@ -737,24 +755,35 @@ def check_deep() -> None:
             ok("doctor_app_identity")
         else:
             fail("doctor_app_identity", f"app={doctor.get('app')} id={doctor.get('bundle_identifier')}")
-        if doctor.get("cli_is_trampoline") and doctor.get("helper_exists") and "Contents/Helpers/prims-desktop" in str(doctor.get("helper", "")):
+        principal = str(doctor.get("principal") or "")
+        running = str(doctor.get("running") or "")
+        if doctor.get("cli_is_trampoline") and APP_EXEC_SNIP in principal:
             ok("trampoline_and_bundle_helper")
         else:
             fail(
                 "trampoline_and_bundle_helper",
-                "doctor must report PATH trampoline + in-bundle helper, not two TCC principals",
+                "doctor must report PATH trampoline + principal Contents/MacOS/Prim",
             )
+        if "Contents/Helpers/prims-desktop" in running:
+            fail(
+                "doctor_running_principal_is_app",
+                f"running={running} — PATH still exec'd the helper (client_type 1)",
+            )
+        elif APP_EXEC_SNIP in running or APP_EXEC_SNIP in principal:
+            ok("doctor_running_principal_is_app", running or principal)
+        else:
+            fail("doctor_running_principal_is_app", f"running={running} principal={principal}")
     except Exception as e:
         fail("doctor_json_schema", str(e))
 
-    app_blob = codesign_blob(ASKED_APP)
-    helper_blob = codesign_blob(HELPER) if HELPER.is_file() else ""
-    if "flags=0x10000(runtime)" in app_blob and "flags=0x10000(runtime)" in helper_blob:
+    app_blob = codesign_blob(ASKED_APP) if ASKED_APP.is_dir() else ""
+    prim_blob = codesign_blob(APP_BIN) if APP_BIN.is_file() else ""
+    if "flags=0x10000(runtime)" in app_blob and "flags=0x10000(runtime)" in prim_blob:
         ok("hardened_runtime")
     elif ASKED_APP.is_dir():
-        fail("hardened_runtime", "app or in-bundle helper missing runtime harden")
+        fail("hardened_runtime", "app or MacOS/Prim missing runtime harden")
     else:
-        skip("hardened_runtime", "app not installed")
+        fail("hardened_runtime", "app not installed — cannot prove hardened runtime")
     if "Developer ID Application: Eidos AGI LLC" in app_blob and "Adhoc" not in app_blob:
         ok("developer_id_not_adhoc")
     else:
@@ -790,6 +819,10 @@ def check_deep() -> None:
         ok("build_sh_internal_prim")
     else:
         fail("build_sh_internal_prim", "internal binary may stay Prim; copy PrimMac → MacOS/Prim")
+    if ".app.bak" in build or "Prims Desktop.app.bak" in build:
+        fail("build_sh_no_bak_ghosts", "build.sh still mints /Applications bak apps")
+    else:
+        ok("build_sh_no_bak_ghosts")
 
     if (ROOT / "Prim.entitlements").is_file() or (ROOT / "PrimsDesktop.entitlements").is_file():
         ok("entitlements_file")
@@ -859,6 +892,199 @@ def check_deep() -> None:
         ok("no_chatgpt_costume_chrome")
 
 
+def codesign_field(blob: str, key: str) -> str:
+    prefix = key + "="
+    for line in blob.splitlines():
+        if line.startswith(prefix):
+            return line.split("=", 1)[1].strip()
+    return ""
+
+
+def codesign_dr(path: Path) -> str:
+    p = run(["codesign", "-dr", "-", str(path)], timeout=20)
+    return (p.stderr + "\n" + p.stdout).strip()
+
+
+def leftover_bak_apps() -> list[str]:
+    ghosts: list[str] = []
+    user = HOME / "Applications" / "Prims Desktop.app"
+    if user.exists():
+        ghosts.append(str(user))
+    for root in (Path("/Applications"), HOME / "Applications"):
+        if not root.is_dir():
+            continue
+        try:
+            names = list(root.iterdir())
+        except OSError:
+            continue
+        for p in names:
+            n = p.name
+            if n.startswith("Prims Desktop.app.bak") or n.startswith("Prim.app.bak"):
+                ghosts.append(str(p))
+    return ghosts
+
+
+def build_sign_commands(text: str) -> list[str]:
+    joined = text.replace("\\\n", " ")
+    out: list[str] = []
+    for line in joined.splitlines():
+        s = line.strip()
+        if s.startswith("#"):
+            continue
+        if "codesign" in s:
+            out.append(s)
+    return out
+
+
+def check_tcc_identity() -> None:
+    """Fail-closed identity / TCC gates. Run from --pro, --deep, and the full litmus."""
+    app_src = (ROOT / "Sources" / "PrimMac" / "App.swift").read_text()
+    main_path = ROOT / "Sources" / "PrimMac" / "PrimDesktopMain.swift"
+    main_src = main_path.read_text() if main_path.is_file() else ""
+    if re.search(r"(?m)^@main\b", app_src):
+        fail("cli_entry_before_swiftui", "PrimApp still has @main — GUI starts before CLI")
+    elif "DesktopCLI" in app_src:
+        fail("cli_entry_before_swiftui", "App.swift talks to DesktopCLI — that is an init() peek")
+    elif (
+        "@main" in main_src
+        and "ProcessEntry.shouldRunCLI" in main_src
+        and "DesktopCLI.run" in main_src
+        and "_exit" in main_src
+        and "PrimApp.main()" in main_src
+        and main_src.find("_exit") < main_src.find("PrimApp.main()")
+    ):
+        ok("cli_entry_before_swiftui")
+    else:
+        fail(
+            "cli_entry_before_swiftui",
+            "need @main PrimDesktopMain that _exit(DesktopCLI.run) before PrimApp.main()",
+        )
+
+    tramp_src = TRAMPOLINE_SRC.read_text() if TRAMPOLINE_SRC.is_file() else ""
+    if APP_EXEC_SNIP in tramp_src and "exec " in tramp_src and HELPER_EXEC_SNIP not in tramp_src:
+        ok("trampoline_source_execs_app")
+    else:
+        fail("trampoline_source_execs_app", "scripts/prims-desktop-trampoline.sh must exec MacOS/Prim")
+
+    which = run(["which", "prims-desktop"]).stdout.strip()
+    if not which:
+        fail("path_cli_execs_macos_prim", "prims-desktop not on PATH")
+    else:
+        kind = run(["file", which]).stdout
+        body = Path(which).read_text(errors="replace") if Path(which).is_file() else ""
+        if "Mach-O" in kind:
+            fail("path_cli_execs_macos_prim", f"{which} is a Mach-O")
+        elif APP_EXEC_SNIP in body and HELPER_EXEC_SNIP not in body and "exec " in body:
+            ok("path_cli_execs_macos_prim", which)
+        else:
+            fail("path_cli_execs_macos_prim", f"{which} must exec {APP_EXEC_SNIP}")
+
+    build = (ROOT / "scripts" / "build.sh").read_text()
+    deep_stomp = [cmd for cmd in build_sign_commands(build) if "--deep" in cmd and "--verify" not in cmd]
+    if deep_stomp:
+        fail("build_sh_no_deep_stomp", " ; ".join(deep_stomp[:3]))
+    elif "--identifier" in build and BUNDLE_ID in build:
+        ok("build_sh_no_deep_stomp")
+    else:
+        fail("build_sh_no_deep_stomp", "build.sh must sign with --identifier sh.prims.desktop and no --deep")
+
+    if ".app.bak" in build or "Prims Desktop.app.bak" in build:
+        fail("build_sh_no_bak_success_path", "build.sh still writes bak apps")
+    else:
+        ok("build_sh_no_bak_success_path")
+
+    ghosts = leftover_bak_apps()
+    if ghosts:
+        fail("no_leftover_app_tcc_ghosts", ", ".join(ghosts))
+    else:
+        ok("no_leftover_app_tcc_ghosts")
+
+    tcc_note = ROOT / "scripts" / "TCC.md"
+    if tcc_note.is_file():
+        note = tcc_note.read_text()
+        if "client_type" in note and "MacOS/Prim" in note and "Do not exec them from PATH" in note:
+            ok("tcc_model_written")
+        else:
+            fail("tcc_model_written", "scripts/TCC.md missing the locked client_type model")
+    else:
+        fail("tcc_model_written", "missing scripts/TCC.md")
+
+    if not APP_BIN.is_file():
+        fail("prim_identifier_sh_prims_desktop", f"missing {APP_BIN}")
+        fail("prim_info_plist_bound", f"missing {APP_BIN}")
+        fail("prim_dr_matches_app", f"missing {APP_BIN}")
+    else:
+        prim_blob = codesign_blob(APP_BIN)
+        ident = codesign_field(prim_blob, "Identifier")
+        if ident == BUNDLE_ID:
+            ok("prim_identifier_sh_prims_desktop", ident)
+        else:
+            fail("prim_identifier_sh_prims_desktop", ident or prim_blob.replace("\n", " ")[:180])
+        plist = codesign_field(prim_blob, "Info.plist")
+        if plist and plist != "not bound":
+            ok("prim_info_plist_bound", plist)
+        else:
+            fail("prim_info_plist_bound", plist or "Info.plist=not bound")
+        prim_dr = codesign_dr(APP_BIN)
+        app_dr = codesign_dr(ASKED_APP) if ASKED_APP.is_dir() else ""
+        if (
+            f'identifier "{BUNDLE_ID}"' in prim_dr
+            and TEAM in prim_dr
+            and f'identifier "{BUNDLE_ID}"' in app_dr
+        ):
+            ok("prim_dr_matches_app")
+        else:
+            fail("prim_dr_matches_app", f"prim={prim_dr[:180]} app={app_dr[:180]}")
+
+    for helper, cid in (
+        (HELPER, "helper_identifier_sh_prims_desktop"),
+        (CHATDB_HELPER, "chatdb_helper_identifier_sh_prims_desktop"),
+    ):
+        if not helper.is_file():
+            skip(cid, f"{helper.name} not installed (PATH must still be MacOS/Prim)")
+            continue
+        blob = codesign_blob(helper)
+        ident = codesign_field(blob, "Identifier")
+        if ident in {helper.name, "prims-desktop", "imessage-chatdb-receive"} and ident != BUNDLE_ID:
+            fail(cid, f"Identifier={ident} — --deep stomp or unsigned filename")
+        elif ident == BUNDLE_ID:
+            ok(cid, ident)
+        else:
+            fail(cid, ident or blob.replace("\n", " ")[:160])
+
+    try:
+        doctor = cli_json(["doctor"])
+    except Exception as e:
+        fail("doctor_chatdb_inherits_app_fda", f"cannot run doctor: {e}")
+        return
+    running = str(doctor.get("running") or "")
+    principal = str(doctor.get("principal") or "")
+    ident = str(doctor.get("principal_identifier") or "")
+    dr = str(doctor.get("principal_designated_requirement") or "")
+    helper_ident = str(doctor.get("helper_identifier") or "")
+    helper_dr = str(doctor.get("helper_designated_requirement") or "")
+    is_app = (
+        ident == BUNDLE_ID
+        and (APP_EXEC_SNIP in running or APP_EXEC_SNIP in principal)
+        and "Contents/Helpers/" not in running
+    )
+    readable = doctor.get("chat_db_readable")
+    if not is_app:
+        fail(
+            "doctor_chatdb_inherits_app_fda",
+            "running principal is not MacOS/Prim "
+            f"running={running} Identifier={ident or helper_ident} DR={dr or helper_dr} "
+            "— do not skip as FDA not granted; do not grant FDA to a helper",
+        )
+    elif readable is True:
+        ok("doctor_chatdb_inherits_app_fda")
+    else:
+        fail(
+            "doctor_chatdb_inherits_app_fda",
+            f"chat_db_readable={readable} running={running} Identifier={ident} DR={dr} "
+            f"helper Identifier={helper_ident} helper DR={helper_dr}",
+        )
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Adversarial Prims Desktop litmus")
@@ -881,6 +1107,8 @@ def main() -> int:
         check_pro()
     if args.deep or (not args.asked and not args.naming and not args.pro):
         check_deep()
+    if args.pro or args.deep or (not args.asked and not args.naming):
+        check_tcc_identity()
 
     print()
     print(f"{len(PASSED)} passed, {len(FAILED)} failed, {len(SKIPPED)} skipped")

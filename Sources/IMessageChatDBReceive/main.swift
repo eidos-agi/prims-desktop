@@ -1,8 +1,8 @@
 import Foundation
 import PrimMacCore
 
-/// Bundle helper. Reads chat.db via ChatDB so it inherits Prims Desktop FDA.
-/// Do not install this Mach-O at ~/.local/bin.
+/// In-app spawn only. A shell-exec'd helper is TCC client_type 1 and does
+/// not inherit the app's FDA. PATH must exec Contents/MacOS/Prim. See scripts/TCC.md.
 
 var healthOnly = false
 var limit = 5

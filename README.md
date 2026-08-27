@@ -7,7 +7,7 @@ Local tree: `~/repos-eidos-agi/prims-desktop` (this repo).
 App: `/Applications/Prims Desktop.app`  
 Identifier: `sh.prims.desktop`  
 Pack UTI: `com.eidosagi.prim` (not the app id)  
-CLI: `prims-desktop` — PATH trampoline that execs `Contents/Helpers/prims-desktop` inside the app (`./scripts/install-cli.sh`)
+CLI: `prims-desktop` — PATH trampoline that execs `Contents/MacOS/Prim` (`./scripts/install-cli.sh`). See `scripts/TCC.md`.
 
 ASMP: `prims-desktop asmp` announces live connectors; health is `http://127.0.0.1:7749/health`.
 

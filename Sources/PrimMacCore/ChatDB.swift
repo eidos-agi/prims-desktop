@@ -4,8 +4,10 @@ import SQLite3
 
 /// In-process reader for `~/Library/Messages/chat.db`.
 /// Decoder is the eidos-do-v1 `chatdb-extract.swift` attributedBody path
-/// (NSUnarchiver / typedstream). Runs in the app or an embedded helper
-/// so it inherits Prims Desktop FDA. Do not read chat.db from a loose bin.
+/// (NSUnarchiver / typedstream). Must run in `Contents/MacOS/Prim` (the
+/// app bundle, TCC client_type 0) so it inherits the app's FDA. A helper
+/// Mach-O exec'd from a shell is client_type 1 and stays locked. Do not
+/// read chat.db from a loose bin. See scripts/TCC.md.
 public enum ChatDB {
     public static let path = NSHomeDirectory() + "/Library/Messages/chat.db"
 

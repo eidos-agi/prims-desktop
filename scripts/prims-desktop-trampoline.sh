@@ -1,10 +1,10 @@
 #!/bin/sh
-# PATH trampoline. Exec the helper inside Prims Desktop.app.
-# Not a TCC principal. Contains no reader.
+# PATH trampoline. Exec the bundle executable — TCC client_type 0.
+# Never exec Contents/Helpers/* from PATH. Not a TCC principal. Contains no reader.
 set -e
-HELPER="/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"
-if [ ! -x "$HELPER" ]; then
-  echo "prims-desktop: helper missing at $HELPER — assemble the app with ./scripts/build.sh" >&2
+PRIM="/Applications/Prims Desktop.app/Contents/MacOS/Prim"
+if [ ! -x "$PRIM" ]; then
+  echo "prims-desktop: app executable missing at $PRIM — assemble the app with ./scripts/build.sh" >&2
   exit 127
 fi
-exec "$HELPER" "$@"
+exec "$PRIM" "$@"

@@ -294,9 +294,19 @@ final class HostTests: XCTestCase {
         )
         XCTAssertEqual(DesktopCLI.appURL().path, "/Applications/Prims Desktop.app")
         XCTAssertEqual(
+            DesktopCLI.principalURL().path,
+            "/Applications/Prims Desktop.app/Contents/MacOS/Prim"
+        )
+        XCTAssertEqual(
+            ProductIdentity.executableURL().path,
+            "/Applications/Prims Desktop.app/Contents/MacOS/Prim"
+        )
+        XCTAssertEqual(
             DesktopCLI.helperURL().path,
             "/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"
         )
+        XCTAssertNotEqual(DesktopCLI.principalURL().path, DesktopCLI.helperURL().path)
+        XCTAssertFalse(DesktopCLI.cliURL().path.contains("/Contents/Helpers/prims-desktop"))
         XCTAssertEqual(DesktopCLI.fdaNote, ProductIdentity.fdaNote)
         XCTAssertEqual(ChatDB.fdaNote, ProductIdentity.fdaNote)
         XCTAssertFalse(ProductIdentity.fdaNote.contains("~/.local/bin"))
@@ -340,10 +350,112 @@ final class HostTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(trampoline.contains("exec "))
-        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"))
+        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/MacOS/Prim"))
+        XCTAssertFalse(trampoline.contains("Contents/Helpers/prims-desktop"))
         XCTAssertFalse(trampoline.contains("chat.db"))
         XCTAssertFalse(trampoline.contains("ChatDB"))
         XCTAssertFalse(trampoline.contains("sqlite"))
+    }
+
+    func testProcessEntryRoutesEveryDesktopCLIVerb() {
+        XCTAssertEqual(
+            DesktopCLI.commands,
+            ["connectors", "status", "receive", "open", "doctor", "asmp", "config", "help"]
+        )
+        XCTAssertEqual(DesktopCLI.globalFlags, ["--json", "-h", "--help"])
+        XCTAssertFalse(ProcessEntry.shouldRunCLI([]), "empty argv is the human glass")
+        XCTAssertFalse(ProcessEntry.shouldRunCLI(["/tmp/note.prim"]))
+        for verb in DesktopCLI.commands {
+            XCTAssertTrue(ProcessEntry.shouldRunCLI([verb]), verb)
+        }
+        for flag in DesktopCLI.globalFlags {
+            XCTAssertTrue(ProcessEntry.shouldRunCLI([flag]), flag)
+        }
+        XCTAssertTrue(ProcessEntry.shouldRunCLI(["config", "get"]), "do not forget config")
+        XCTAssertTrue(ProcessEntry.shouldRunCLI(["--json", "doctor"]))
+        XCTAssertFalse(ProcessEntry.shouldRunCLI(["--unknown-flag"]))
+    }
+
+    func testCLIEntryIsProcessMainNotSwiftUIInit() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let app = try String(contentsOf: root.appendingPathComponent("Sources/PrimMac/App.swift"), encoding: .utf8)
+        let main = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/PrimDesktopMain.swift"),
+            encoding: .utf8
+        )
+        let cli = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/DesktopCLI.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(
+            app.split("\n").contains(where: { $0 == "@main" || $0.hasPrefix("@main ") }),
+            "PrimApp must not be @main — that starts NSApplication"
+        )
+        XCTAssertFalse(app.contains("DesktopCLI"), "App.swift must not peek CLI — that is an init() gate")
+        XCTAssertTrue(main.contains("@main"))
+        XCTAssertTrue(main.contains("enum PrimDesktopMain") || main.contains("struct PrimDesktopMain"))
+        XCTAssertTrue(main.contains("ProcessEntry.shouldRunCLI"))
+        XCTAssertTrue(main.contains("DesktopCLI.run"))
+        XCTAssertTrue(main.contains("_exit"))
+        XCTAssertTrue(main.contains("PrimApp.main()"))
+        let exitRange = try XCTUnwrap(main.range(of: "_exit"))
+        let glassRange = try XCTUnwrap(main.range(of: "PrimApp.main()"))
+        XCTAssertTrue(exitRange.lowerBound < glassRange.lowerBound, "_exit must come before PrimApp.main()")
+        for verb in ["connectors", "status", "receive", "open", "doctor", "asmp", "config"] {
+            XCTAssertTrue(cli.contains("case \"\(verb)\":"), "DesktopCLI.invoke missing \(verb)")
+        }
+        XCTAssertTrue(cli.contains("public static let commands"))
+    }
+
+    func testBuildScriptDoesNotDeepStompIdentifiers() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let build = try String(contentsOf: root.appendingPathComponent("scripts/build.sh"), encoding: .utf8)
+        let joined = build.replacingOccurrences(of: "\\\n", with: " ")
+        for line in joined.split(separator: "\n").map(String.init) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("#") { continue }
+            guard trimmed.contains("codesign") else { continue }
+            if trimmed.contains("--deep") {
+                XCTAssertTrue(
+                    trimmed.contains("--verify"),
+                    "build.sh must not codesign --deep (resets nested Identifier): \(trimmed)"
+                )
+            }
+        }
+        XCTAssertTrue(build.contains("--identifier"))
+        XCTAssertTrue(build.contains("sh.prims.desktop"))
+        XCTAssertFalse(build.contains(".app.bak"))
+        XCTAssertFalse(build.contains("/Applications/Prims Desktop.app.bak"))
+        XCTAssertTrue(build.contains("mktemp"))
+        XCTAssertTrue(build.contains("Contents/MacOS/Prim"))
+    }
+
+    func testTrampolineAndInstallCLIExecAppExecutable() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let trampoline = try String(
+            contentsOf: root.appendingPathComponent("scripts/prims-desktop-trampoline.sh"),
+            encoding: .utf8
+        )
+        let install = try String(
+            contentsOf: root.appendingPathComponent("scripts/install-cli.sh"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(trampoline.contains("exec \"$PRIM\" \"$@\""))
+        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/MacOS/Prim"))
+        XCTAssertFalse(trampoline.contains("Helpers/prims-desktop"))
+        XCTAssertFalse(install.contains("codesign"))
+        XCTAssertTrue(install.contains("Contents/MacOS/Prim"))
+        XCTAssertTrue(install.contains("Contents/Helpers/prims-desktop"))
+        XCTAssertTrue(install.contains("must not exec Contents/Helpers/prims-desktop"))
     }
 
     func testSourcesDoNotAskFDAForLooseCLI() throws {

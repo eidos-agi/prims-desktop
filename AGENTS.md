@@ -14,7 +14,7 @@ Keyword **testr** / **shipr**: load the committed models in `.testr/` and
 | Company ship (default build) | `Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM)` + notary |
 | Forbidden | ad-hoc, Local Dev as ship, personal `LJWV44N8BF` |
 
-Team ID **Y6CQ4SWPWM**. Identifier **sh.prims.desktop**. Backup `/Applications/Prims Desktop.app` before replace. Pack UTI stays `com.eidosagi.prim`.
+Team ID **Y6CQ4SWPWM**. Identifier **sh.prims.desktop**. Stage the live app aside and delete after swap — do not leave `/Applications/*.bak*` (TCC ghosts). Pack UTI stays `com.eidosagi.prim`. PATH CLI execs `Contents/MacOS/Prim`. See `scripts/TCC.md`.
 
 ## Proof then ship
 

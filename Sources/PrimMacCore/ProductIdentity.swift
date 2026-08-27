@@ -18,6 +18,13 @@ public enum ProductIdentity {
         URL(fileURLWithPath: appPath)
     }
 
+    /// Bundle executable. PATH CLI must exec this (TCC client_type 0).
+    public static func executableURL() -> URL {
+        appURL()
+            .appendingPathComponent("Contents/MacOS")
+            .appendingPathComponent(executableName)
+    }
+
     public static func helpersDirectory() -> URL {
         appURL().appendingPathComponent("Contents/Helpers")
     }

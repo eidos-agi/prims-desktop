@@ -111,6 +111,17 @@ already works. A `stop` means checkpoint, not grind.
 **File / category noun:** Prim (singular pack). Do not invent Prunes/Print or
 `desktop.prims.sh` — live face is https://prims.sh/desktop/ on prim-web.
 
+## TCC / Full Disk Access
+
+The Messages grant is on the **app bundle** (`sh.prims.desktop`, TCC
+`client_type` 0). A helper Mach-O exec'd from a shell is `client_type` 1 —
+same Identifier is not enough. PATH `prims-desktop` must `exec`
+`/Applications/Prims Desktop.app/Contents/MacOS/Prim`. Process entry is
+`PrimDesktopMain`: CLI verbs call `DesktopCLI` and `_exit` before
+`NSApplication`. Do not use `~/Applications/Prims Desktop.app`. Do not
+leave bak apps in `/Applications`. Do not resign Helpers to "fix" FDA.
+The durable note is `scripts/TCC.md`.
+
 ## Drive sync (provisional)
 
 **Not stamped.** Daniel dismissed the Drive-as-sync stamp widget — this is a

@@ -1,7 +1,9 @@
 import AppKit
 import SwiftUI
 
-@main
+/// Human glass only. Process entry is `PrimDesktopMain`. Do not mark this
+/// type as the process entry and do not peek argv in `init()`.
+/// `NSApplication` starts in `PrimApp.main()`.
 struct PrimApp: App {
     @NSApplicationDelegateAdaptor(DeskAppDelegate.self) private var delegate
     @StateObject private var desk = DeskModel()
@@ -39,6 +41,8 @@ struct PrimApp: App {
     }
 }
 
+/// GUI-only. Unreachable for `Prim doctor` / PATH CLI — those `_exit` in
+/// `PrimDesktopMain` before `PrimApp.main()`.
 final class DeskAppDelegate: NSObject, NSApplicationDelegate {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { false }
 
