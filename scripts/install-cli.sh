@@ -3,6 +3,7 @@
 # Does not rebuild Prims Desktop.app.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(realpath "$ROOT")"
 DEST="$HOME/.local/bin"
 TEAM="Y6CQ4SWPWM"
 IDENTITY="Developer ID Application: Eidos AGI LLC ($TEAM)"

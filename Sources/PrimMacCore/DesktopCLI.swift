@@ -17,10 +17,12 @@ public enum DesktopCLI {
       prims-desktop receive imessage-chatdb-receive [--limit N]
       prims-desktop open
       prims-desktop doctor
+      prims-desktop asmp
       prims-desktop config get [<name>]
       prims-desktop config set <name> <field> <value>
 
     --json anywhere. Overlay is ~/.prim/registry.local.json (not a second store).
+    ASMP health is http://127.0.0.1:7749/health.
     """
 
     public static let fdaNote = """
@@ -61,6 +63,8 @@ public enum DesktopCLI {
                 return try cmdOpen(json: parsed.json)
             case "doctor":
                 return try cmdDoctor(json: parsed.json)
+            case "asmp":
+                return try cmdAsmp(parsed.positionals, json: parsed.json)
             case "config":
                 return try cmdConfig(parsed.positionals, json: parsed.json)
             default:
@@ -193,6 +197,8 @@ public enum DesktopCLI {
         let cliExists = FileManager.default.isExecutableFile(atPath: cli.path)
         let cliTeam = cliExists ? teamIdentifier(for: cli) : nil
         let readable = ChatDB.health()
+        let connectors = (try? HostCatalog.load()).map { HostUI.connectors($0.registry.tools) } ?? []
+        let asmp = ASMP.doctor(connectors: connectors)
         let payload: [String: Any] = [
             "overlay": overlay.path,
             "overlay_exists": overlayExists,
@@ -206,6 +212,7 @@ public enum DesktopCLI {
             "chat_db": ChatDB.path,
             "chat_db_readable": readable,
             "fda": readable,
+            "asmp": ASMP.json(asmp),
         ]
         if json {
             return emitJSON(payload, status: 0)
@@ -218,6 +225,9 @@ public enum DesktopCLI {
             "cli         \(cli.path)\(cliExists ? "" : "  (not installed)")",
             "cli team    \(cliTeam ?? "(unsigned / unknown)")",
             "chat.db     \(readable ? "readable" : "locked (FDA)")",
+            "asmp        \(asmp.registered ? "registered" : "missing")  health=\(asmp.health ? "ok" : "down")  caps_match=\(asmp.capsMatch ? "yes" : "no")",
+            "asmp health \(ASMP.healthURL.absoluteString)",
+            "asmp connectors  \(asmp.announcedConnectors.isEmpty ? "(none announced)" : asmp.announcedConnectors.joined(separator: ", "))",
         ]
         return Result(status: 0, stdout: lines.joined(separator: "\n") + "\n", stderr: "")
     }
@@ -270,6 +280,34 @@ public enum DesktopCLI {
         default:
             return fail(1, "config expects get or set", json: json)
         }
+    }
+
+    private static func cmdAsmp(_ positionals: [String], json: Bool) throws -> Result {
+        if positionals.first == "serve" {
+            // Forever. Does not return on success.
+            return Result(status: ASMP.serveHealth(), stdout: "", stderr: "")
+        }
+        let catalog = try HostCatalog.load()
+        let connectors = HostUI.connectors(catalog.registry.tools)
+        let report = try ASMP.announceLive(connectors: connectors)
+        if json {
+            return okJSON([
+                "ok": true,
+                "announced": report.announced,
+                "capabilities": report.capabilities,
+                "health": report.health,
+                "health_url": report.healthURL,
+                "yaml": report.yaml,
+                "registry": report.registry,
+            ])
+        }
+        let lines = [
+            "yaml       \(report.yaml)",
+            "health     \(report.health ? "ok" : "down")  \(report.healthURL)",
+            "announced  \(report.announced.joined(separator: ", "))",
+            "caps       \(report.capabilities.joined(separator: ", "))",
+        ]
+        return Result(status: report.health ? 0 : 2, stdout: lines.joined(separator: "\n") + "\n", stderr: "")
     }
 
     // MARK: - rows / status

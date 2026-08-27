@@ -26,4 +26,4 @@ Team ID **Y6CQ4SWPWM**. Backup `~/Applications/Prims Desktop.app` before replace
 
 ## Autonomous prove
 
-`./scripts/prove.sh` — CLI + HostTests. No AppleScript. No screenshots.
+`./scripts/prove.sh` — CLI + ASMP announce + path-relevant HostTests. No AppleScript. No screenshots.

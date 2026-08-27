@@ -33,4 +33,12 @@ public enum Paths {
     public static func samples() -> URL {
         home().appendingPathComponent("repos-eidos-agi/prim-web/demo")
     }
+
+    /// Shipped ASMP manifest. Override with `PRIM_ASMP_YAML`.
+    public static func asmpYAML() -> URL {
+        if let env = ProcessInfo.processInfo.environment["PRIM_ASMP_YAML"], !env.isEmpty {
+            return URL(fileURLWithPath: env)
+        }
+        return home().appendingPathComponent("repos-eidos-agi/prims-desktop/asmp.yaml")
+    }
 }

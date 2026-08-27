@@ -22,19 +22,31 @@ runtime:
   binary: ~/.local/bin/prims-desktop
 
 endpoints:
+  - protocol: http
+    host: 127.0.0.1
+    port: 7749
+    path: /health
+    visibility: loopback
+    note: ASMP/eamd health probe
   - protocol: cli
     host: local
     visibility: local
     command: prims-desktop
-    note: connectors / status / receive / doctor / open
+    note: connectors / status / receive / doctor / open / asmp
+
+health:
+  method: http
+  target: http://127.0.0.1:7749/health
+  interval: 30s
+  timeout: 5s
 
 capabilities:
   provides:
     - prims-desktop.host
     - prims-desktop.cli
+    - connector.docket-webmcp
     - connector.imessage-chatdb-receive
     - connector.opff-dally-receive
-    - connector.docket-webmcp
     - connector.prim-viewer-webmcp
   requires:
     - prim
@@ -56,9 +68,11 @@ infra:
   github: https://github.com/eidos-agi/prims-desktop
   app: ~/Applications/Prims Desktop.app
   overlay: ~/.prim/registry.local.json
+  health_port: 7749
   verify:
     - prims-desktop doctor
     - prims-desktop connectors
+    - prims-desktop asmp
     - ./scripts/prove.sh
 
 display:

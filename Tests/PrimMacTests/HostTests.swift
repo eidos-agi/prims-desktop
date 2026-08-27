@@ -237,4 +237,48 @@ final class HostTests: XCTestCase {
         XCTAssertEqual(result.status, 1)
         XCTAssertTrue(result.stderr.contains("only imessage-chatdb-receive"), result.stderr)
     }
+
+    func testASMPLiveCapsFollowHostCatalog() throws {
+        let catalog = try HostCatalog.load()
+        let connectors = HostUI.connectors(catalog.registry.tools)
+        let names = Set(connectors.map(\.name))
+        XCTAssertTrue(names.contains("imessage-chatdb-receive"))
+        XCTAssertTrue(names.contains("opff-dally-receive"))
+        let caps = ASMP.liveCapabilities(connectors: connectors)
+        XCTAssertTrue(caps.contains("prims-desktop.host"))
+        XCTAssertTrue(caps.contains("prims-desktop.cli"))
+        for name in names {
+            XCTAssertTrue(caps.contains("connector.\(name)"), "missing connector.\(name)")
+        }
+        XCTAssertFalse(caps.contains("prim." + "connector"))
+        XCTAssertFalse(caps.contains("prim." + "surface"))
+
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("prim-asmp-\(UUID().uuidString).yaml")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try ASMP.writeManifest(connectors: connectors, url: tmp)
+        let yaml = try String(contentsOf: tmp, encoding: .utf8)
+        XCTAssertTrue(yaml.contains("connector.imessage-chatdb-receive"))
+        XCTAssertTrue(yaml.contains("connector.opff-dally-receive"))
+        XCTAssertTrue(yaml.contains("http://127.0.0.1:7749/health"))
+        XCTAssertFalse(yaml.contains("kind: " + "prim.connector"))
+    }
+
+    func testASMPConnectorManifestIsAServiceNotAPackType() {
+        let tool = PrimTool(
+            name: "imessage-chatdb-receive",
+            kind: "connector",
+            direction: "receive",
+            cites: "*",
+            as: "chatdb-sqlite",
+            bin: "imessage-chatdb-receive",
+            repo: "local"
+        )
+        let m = ASMP.connectorManifest(tool)
+        XCTAssertEqual(m["kind"] as? String, "service")
+        XCTAssertEqual(m["name"] as? String, "imessage-chatdb-receive")
+        XCTAssertEqual(m["parent"] as? String, "prims-desktop")
+        let caps = m["capabilities"] as? [String: Any]
+        let provides = caps?["provides"] as? [String]
+        XCTAssertEqual(provides, ["connector.imessage-chatdb-receive"])
+    }
 }
