@@ -167,6 +167,22 @@ def check_source_identity() -> None:
     else:
         fail("fda_note_exact", "locked FDA sentence missing")
 
+    stage = (ROOT / "Sources/PrimMac/UI/StageView.swift").read_text()
+    person = (ROOT / "Sources/PrimMacCore/PersonNames.swift").read_text()
+    chatdb = (ROOT / "Sources/PrimMacCore/ChatDB.swift").read_text()
+    if 'message.fromMe ? "You" : "Them"' in stage:
+        fail("stage_shows_person_names", "StageView still hardcodes You/Them")
+    elif "PersonNames" not in stage:
+        fail("stage_shows_person_names", "StageView does not resolve PersonNames")
+    elif 'appendingPathComponent("person"' not in person:
+        fail("stage_shows_person_names", "PersonNames must walk Documents/Prims/person/<slug>")
+    elif '"emails"' not in person or '"phones"' not in person:
+        fail("stage_shows_person_names", "PersonNames must match person.json emails[] and phones[]")
+    elif "public var identifier: String" not in chatdb or "chat.display_name" not in chatdb:
+        fail("stage_shows_person_names", "ChatDB.Message must carry identifier and chat.display_name")
+    else:
+        ok("stage_shows_person_names")
+
 
 def check_identity() -> None:
     if ROOT.name == ASKED_DIR:
