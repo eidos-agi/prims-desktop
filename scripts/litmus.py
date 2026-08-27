@@ -56,7 +56,10 @@ _PASEO_SOURCE_DONE = False
 def run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PATH"] = str(HOME / ".local/bin") + ":" + str(HOME / ".asmp/bin") + ":" + env.get("PATH", "")
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+    except FileNotFoundError as e:
+        return subprocess.CompletedProcess(cmd, 127, "", str(e))
 
 
 def ok(cid: str, detail: str = "") -> None:
@@ -277,6 +280,13 @@ def check_paseo_source() -> None:
 
 
 def check_paseo_cli(names: list[str] | None = None) -> None:
+    if run(["which", "prims-desktop"]).returncode != 0:
+        skip("cli_lists_paseo", "prims-desktop not on PATH")
+        skip("cli_cells_lists_registry", "prims-desktop not on PATH")
+        skip("asmp_announces_paseo", "prims-desktop not on PATH")
+        skip("paseo_asmp_not_fake_http", "prims-desktop not on PATH")
+        skip("send_requires_no_wait", "prims-desktop not on PATH")
+        return
     if names is None:
         try:
             names = desktop_connector_names(
