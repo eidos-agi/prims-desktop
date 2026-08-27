@@ -22,7 +22,7 @@ public enum DesktopCLI {
       prims-desktop config set <name> <field> <value>
       prims-desktop cells
       prims-desktop cells add <id> --host H --port N --reach local|ssh [--ssh hop] [--notes text]
-      prims-desktop health <tenant>
+      prims-desktop health <tenant>   # GET http://host:port/api/health (not paseo health)
       prims-desktop ls <tenant>
       prims-desktop inspect <tenant> <id>
       prims-desktop logs <tenant> [<id>]
@@ -76,7 +76,9 @@ public enum DesktopCLI {
                 return try cmdConfig(parsed.positionals, json: parsed.json)
             case "cells":
                 return try cmdCells(parsed, json: parsed.json)
-            case "health", "ls", "inspect", "logs", "send":
+            case "health":
+                return try cmdPaseoHealth(parsed)
+            case "ls", "inspect", "logs", "send":
                 return try cmdPaseo(parsed)
             case "run", "clone", "delete", "archive", "permit", "daemon", "recreate":
                 return fail(1, "\(parsed.command) is out of v1 for \(Paseo.connectorName)", json: parsed.json)
@@ -430,6 +432,42 @@ public enum DesktopCLI {
         return Result(status: 0, stdout: "added \(tenant.human())\n", stderr: "")
     }
 
+    private static func cmdPaseoHealth(_ parsed: Parsed) throws -> Result {
+        guard let tenantID = parsed.positionals.first else {
+            return fail(1, "health needs a tenant from the paseo registry", json: parsed.json)
+        }
+        let tenant: Paseo.Tenant
+        do {
+            tenant = try Paseo.tenant(named: tenantID)
+        } catch {
+            return fail(1, error.localizedDescription, json: parsed.json)
+        }
+        let row = Paseo.health(tenant: tenant)
+        var payload: [String: Any] = [
+            "ok": row.ok,
+            "connector": Paseo.connectorName,
+            "tenant": tenant.id,
+            "verb": "health",
+            "host": tenant.operateHost,
+            "tunneled": tenant.reach == .ssh,
+            "url": row.url,
+            "http": row.http,
+            "argv": row.argv,
+            "note": row.note,
+        ]
+        if !row.ok {
+            payload["dark"] = true
+            payload["error"] = row.note
+        }
+        if parsed.json {
+            return emitJSON(payload, status: row.ok ? 0 : 2)
+        }
+        if row.ok {
+            return Result(status: 0, stdout: "\(tenant.id)  \(row.note)\n", stderr: "")
+        }
+        return Result(status: 2, stdout: "", stderr: "prims-desktop: \(tenant.id) \(row.note)\n")
+    }
+
     private static func cmdPaseo(_ parsed: Parsed) throws -> Result {
         if parsed.follow {
             return fail(1, "logs is read-only; --follow is out of v1", json: parsed.json)
@@ -586,6 +624,8 @@ public enum DesktopCLI {
                 obj["ok"] = row.ok
                 obj["dark"] = row.dark
                 obj["note"] = row.note
+                obj["url"] = row.url
+                obj["http"] = row.http
                 return obj
             },
             "note": ok

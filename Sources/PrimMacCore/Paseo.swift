@@ -9,7 +9,9 @@ public enum Paseo {
     public static let proveAgent = "102adae1-a260-47dc-b8b1-087cfed7aff3"
     public static let proveTenant = "paseo-gmw"
 
+    /// Desktop v1. `health` is HTTP `/api/health` on the cell, not a paseo verb.
     public static let v1Verbs: Set<String> = ["cells", "health", "ls", "inspect", "logs", "send"]
+    public static let v1PaseoVerbs: Set<String> = ["ls", "inspect", "logs", "send"]
     public static let outOfV1: Set<String> = [
         "run", "clone", "delete", "archive", "permit", "daemon", "recreate",
     ]
@@ -62,6 +64,10 @@ public enum Paseo {
             reach == .ssh ? "127.0.0.1:\(localForwardPort)" : remoteTarget
         }
 
+        public var apiHealthURL: URL {
+            URL(string: "http://\(operateHost)/api/health")!
+        }
+
         public func json() -> [String: Any] {
             [
                 "id": id,
@@ -96,6 +102,8 @@ public enum Paseo {
         public var ok: Bool
         public var dark: Bool
         public var note: String
+        public var url: String
+        public var http: Int
         public var argv: [String]
     }
 
@@ -103,10 +111,13 @@ public enum Paseo {
     public static var execHook: (([String]) throws -> ExecResult)?
     /// Test hook. When set, SSH is not spawned.
     public static var tunnelHook: ((Tenant) throws -> Void)?
+    /// Test hook. When set, `/api/health` is not fetched.
+    public static var healthHook: ((Tenant, URL) throws -> (Int, String))?
 
     public static func resetTestHooks() {
         execHook = nil
         tunnelHook = nil
+        healthHook = nil
     }
 
     public static func isPaseo(_ tool: PrimTool) -> Bool {
@@ -202,10 +213,13 @@ public enum Paseo {
         if verb == "logs" && extras.contains("--follow") {
             throw LocalOverlay.OverlayError("logs is read-only; --follow is out of v1")
         }
+        if verb == "health" {
+            throw LocalOverlay.OverlayError("paseo has no health verb; probe /api/health")
+        }
         if outOfV1.contains(verb) {
             throw LocalOverlay.OverlayError("\(verb) is out of v1 for \(connectorName)")
         }
-        if verb != "cells" && !v1Verbs.contains(verb) {
+        if !v1PaseoVerbs.contains(verb) {
             throw LocalOverlay.OverlayError("unknown paseo verb \(verb)")
         }
         return try withReach(tenant) { host in
@@ -217,24 +231,33 @@ public enum Paseo {
         }
     }
 
+    /// Cerebroski prove: cell `/api/health` 200. Native paseo 0.6.1 has no health verb.
     public static func health(tenant: Tenant) -> TenantHealth {
+        let url = tenant.apiHealthURL
         do {
-            let result = try operate(tenant: tenant, verb: "health")
-            let ok = result.status == 0
-            return TenantHealth(
-                tenant: tenant,
-                ok: ok,
-                dark: !ok,
-                note: ok ? "reachable \(result.host)" : (result.stderr.isEmpty ? result.stdout : result.stderr),
-                argv: result.argv
-            )
+            return try withReach(tenant) { host in
+                let target = URL(string: "http://\(host)/api/health") ?? url
+                let (code, body) = try getAPIHealth(tenant: tenant, url: target)
+                let ok = isHealthy(code: code, body: body)
+                return TenantHealth(
+                    tenant: tenant,
+                    ok: ok,
+                    dark: !ok,
+                    note: ok ? "reachable \(target.absoluteString)" : "dark \(target.absoluteString) HTTP \(code)",
+                    url: target.absoluteString,
+                    http: code,
+                    argv: ["GET", target.absoluteString]
+                )
+            }
         } catch {
             return TenantHealth(
                 tenant: tenant,
                 ok: false,
                 dark: true,
                 note: error.localizedDescription,
-                argv: []
+                url: url.absoluteString,
+                http: 0,
+                argv: ["GET", url.absoluteString]
             )
         }
     }
@@ -262,7 +285,15 @@ public enum Paseo {
         _ = group.wait(timeout: .now() + 8)
         let known = Set(scored.map { $0.tenant.id })
         for tenant in tenants where !known.contains(tenant.id) {
-            scored.append(TenantHealth(tenant: tenant, ok: false, dark: true, note: "probe timeout", argv: []))
+            scored.append(TenantHealth(
+                tenant: tenant,
+                ok: false,
+                dark: true,
+                note: "probe timeout",
+                url: tenant.apiHealthURL.absoluteString,
+                http: 0,
+                argv: ["GET", tenant.apiHealthURL.absoluteString]
+            ))
         }
         let rows = scored.sorted { $0.tenant.id < $1.tenant.id }
         return (rows.contains(where: \.ok), rows)
@@ -270,7 +301,53 @@ public enum Paseo {
 
     // MARK: - reach (connector-owned forward; no ~/.ssh/config writes)
 
-    private static func withReach(_ tenant: Tenant, run: (String) throws -> ExecResult) throws -> ExecResult {
+    private static func getAPIHealth(tenant: Tenant, url: URL) throws -> (Int, String) {
+        if let hook = healthHook {
+            return try hook(tenant, url)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 5
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let box = HTTPBox()
+        let sem = DispatchSemaphore(value: 0)
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            box.data = data
+            box.error = error
+            box.code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            sem.signal()
+        }
+        task.resume()
+        if sem.wait(timeout: .now() + 6) == .timedOut {
+            throw LocalOverlay.OverlayError("timeout \(url.absoluteString)")
+        }
+        if let error = box.error {
+            throw LocalOverlay.OverlayError("\(url.absoluteString) \(error.localizedDescription)")
+        }
+        let text = box.data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        return (box.code, text)
+    }
+
+    private static func isHealthy(code: Int, body: String) -> Bool {
+        guard code == 200 else { return false }
+        if body.isEmpty { return true }
+        guard let data = body.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return true }
+        if let ok = obj["ok"] as? Bool { return ok }
+        if let status = obj["status"] as? String {
+            return ["ok", "healthy", "up", "ready"].contains(status.lowercased())
+        }
+        return true
+    }
+
+    private final class HTTPBox: @unchecked Sendable {
+        var data: Data?
+        var error: Error?
+        var code: Int = 0
+    }
+
+    private static func withReach<T>(_ tenant: Tenant, run: (String) throws -> T) throws -> T {
         if tenant.reach == .local {
             return try run(tenant.operateHost)
         }

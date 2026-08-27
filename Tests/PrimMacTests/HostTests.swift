@@ -439,6 +439,11 @@ final class HostTests: XCTestCase {
             Paseo.tunnelHook = { tenant in
                 hops.append("\(tenant.id):\(tenant.localForwardPort):\(tenant.ssh)")
             }
+            var healthURLs: [String] = []
+            Paseo.healthHook = { tenant, url in
+                healthURLs.append(url.absoluteString)
+                return (200, #"{"ok":true,"status":"ok"}"#)
+            }
 
             let blocked = DesktopCLI.invoke(["send", "paseo-gmw", Paseo.proveAgent, "hi", "--json"])
             XCTAssertEqual(blocked.status, 1)
@@ -461,6 +466,22 @@ final class HostTests: XCTestCase {
 
             let health = DesktopCLI.invoke(["health", "paseo-gmw", "--json"])
             XCTAssertEqual(health.status, 0, health.stderr)
+            let healthObj = try jsonObject(health.stdout)
+            XCTAssertEqual(healthObj["url"] as? String, "http://127.0.0.1:26768/api/health")
+            XCTAssertEqual(healthObj["http"] as? Int, 200)
+            XCTAssertEqual(healthURLs, ["http://127.0.0.1:26768/api/health"])
+            XCTAssertFalse(calls.contains { $0.contains("health") }, "must not invent paseo health")
+            let laptopHealth = DesktopCLI.invoke(["health", "laptop", "--json"])
+            XCTAssertEqual(laptopHealth.status, 0, laptopHealth.stderr)
+            let laptopHealthObj = try jsonObject(laptopHealth.stdout)
+            XCTAssertEqual(laptopHealthObj["url"] as? String, "http://127.0.0.1:6767/api/health")
+            XCTAssertEqual(laptopHealthObj["tunneled"] as? Bool, false)
+            do {
+                _ = try Paseo.operate(tenant: try Paseo.tenant(named: "laptop"), verb: "health")
+                XCTFail("operate must not invent paseo health")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("/api/health"), error.localizedDescription)
+            }
             let logs = DesktopCLI.invoke(["logs", "laptop", "--json"])
             XCTAssertEqual(logs.status, 0, logs.stderr)
             let follow = DesktopCLI.invoke(["logs", "laptop", "--follow", "--json"])
@@ -501,6 +522,7 @@ final class HostTests: XCTestCase {
                 Paseo.ExecResult(status: 1, stdout: "", stderr: "down", argv: argv, host: argv[4], tunneled: true)
             }
             Paseo.tunnelHook = { _ in }
+            Paseo.healthHook = { _, _ in (503, #"{"ok":false}"#) }
             let result = DesktopCLI.invoke(["status", Paseo.connectorName, "--json"])
             XCTAssertEqual(result.status, 2)
             let obj = try jsonObject(result.stdout)
