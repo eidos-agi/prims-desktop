@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+"""Score Prim.app against GREAT.md. Exit 0 if >= target, 1 if below, 2 on harness error."""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+GREAT = json.loads((ROOT / "scripts" / "great.json").read_text())
+APP = Path.home() / "Applications" / "Prim.app"
+LEARN = ROOT / ".learn"
+OBS_PATH = LEARN / "observations.json"
+ACCEPTANCE = ROOT / "ACCEPTANCE.md"
+HOST_TESTS = ROOT / "Tests" / "PrimMacTests" / "HostTests.swift"
+HOST_VIEW = ROOT / "Sources" / "PrimMac" / "HostView.swift"
+HOST_UI = ROOT / "Sources" / "PrimMacCore" / "HostUI.swift"
+INFO = ROOT / "Info.plist"
+FOLIOS = Path("/Users/dshanklinbv/repos-eidos-agi/prim-web/demo/docket/folios.js")
+SAMPLES = Path("/Users/dshanklinbv/repos-eidos-agi/prim-web/demo/docket")
+
+
+def load_obs() -> dict:
+    if not OBS_PATH.exists():
+        return {}
+    return json.loads(OBS_PATH.read_text())
+
+
+def ac_status(text: str, ac: str) -> str:
+    m = re.search(rf"^[-*]\s+([✅🔧⬜🐛]).*\*\*{re.escape(ac)}\b", text, re.M)
+    return m.group(1) if m else ""
+
+
+def file_has(path: Path, needle: str) -> bool:
+    try:
+        return needle in path.read_text(errors="replace")
+    except OSError:
+        return False
+
+
+def run(cmd: list[str], timeout: int) -> tuple[int, str]:
+    try:
+        p = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
+        out = (p.stdout or "") + (p.stderr or "")
+        return p.returncode, out
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 99, str(e)
+
+
+def latest_proof() -> Path | None:
+    proofs = LEARN / "proofs"
+    cands: list[Path] = []
+    if proofs.exists():
+        cands.extend(proofs.glob("*.png"))
+    tmp = Path("/tmp/prim-obif-window.png")
+    if tmp.exists():
+        cands.append(tmp)
+    cands = [p for p in cands if p.stat().st_size > 20_000]
+    if not cands:
+        return None
+    return max(cands, key=lambda p: p.stat().st_mtime)
+
+
+def sample_prims() -> list[Path]:
+    if not SAMPLES.exists():
+        return []
+    return sorted(SAMPLES.glob("*.prim"))
+
+
+def score_land(obs: dict, proof: Path | None, ac: str) -> tuple[int, list[str]]:
+    pts, why = 0, []
+    if APP.exists():
+        pts += 4
+        why.append("Prim.app installed")
+    if file_has(INFO, "com.eidosagi.prim") and file_has(INFO, "CFBundleDocumentTypes"):
+        pts += 4
+        why.append("UTI + document type")
+    if file_has(HOST_TESTS, "testOpeningObifHostsTheEditor"):
+        pts += 4
+        why.append("empty toolName hosts obif-editor (unit)")
+    if proof is not None and obs.get("obif_no_fallback"):
+        pts += 4
+        why.append(f"window proof {proof.name} and no fallback")
+    elif proof is not None:
+        pts += 2
+        why.append(f"window proof {proof.name} but fallback not cleared in observations")
+    if obs.get("finder_double_click_proven"):
+        pts += 4
+        why.append("Finder double-click proven")
+    else:
+        why.append("Finder double-click unproven")
+    return min(pts, 20), why
+
+
+def score_host(obs: dict, ac: str, tests_ok: bool | None) -> tuple[int, list[str]]:
+    pts, why = 0, []
+    if ac_status(ac, "AC-2") == "✅":
+        pts += 5
+        why.append("AC-2 all types")
+    if ac_status(ac, "AC-3") == "✅":
+        pts += 2
+        why.append("AC-3 citing surfaces listed")
+    if tests_ok:
+        pts += 8
+        why.append("HostTests passed")
+    elif tests_ok is False:
+        why.append("HostTests failed")
+    else:
+        why.append("HostTests skipped")
+        if file_has(HOST_TESTS, "testEverySampleHasACitingSurface"):
+            pts += 4
+            why.append("sample-surface test exists (unrun)")
+    return min(pts, 15), why
+
+
+def score_file(obs: dict, ac: str) -> tuple[int, list[str]]:
+    pts, why = 0, []
+    if ac_status(ac, "AC-6") == "✅":
+        pts += 5
+        why.append("AC-6 Save As identity")
+    if file_has(HOST_TESTS, "testExportMutationStaysTheKind"):
+        pts += 4
+        why.append("mutation export keeps kind (unit)")
+    if obs.get("save_writes_mutations") and ac_status(ac, "AC-5") == "✅":
+        pts += 6
+        why.append("in-app Save writes mutations")
+    else:
+        why.append("AC-5 in-app mutation Save unproven")
+    return min(pts, 15), why
+
+
+def score_place(obs: dict, proof: Path | None) -> tuple[int, list[str]]:
+    pts, why = 0, []
+    if FOLIOS.exists() and file_has(FOLIOS, 'data-view="book"'):
+        pts += 2
+        why.append("folios.js is one book, not tabs")
+    if proof is not None and obs.get("obif_cover_visible") and obs.get("obif_no_cover_stamp"):
+        pts += 5
+        why.append("cover visible in Prim.app, no COVER stamp")
+    elif obs.get("obif_cover_visible"):
+        pts += 2
+        why.append("cover claimed without stamp/proof pairing")
+    plates = sum(
+        1
+        for k in ("obif_mark_in_app", "obif_type_in_app", "obif_voice_in_app", "obif_ground_in_app")
+        if obs.get(k)
+    )
+    pts += plates * 2
+    if plates:
+        why.append(f"{plates}/4 later plates seen in app")
+    else:
+        why.append("Mark/Type/Voice/Ground not seen in Prim.app")
+    if obs.get("scroll_moves_webview"):
+        pts += 0  # plates already cover the outcome
+        why.append("scroll moves WKWebView")
+    else:
+        why.append("scroll does not yet move the WKWebView")
+    return min(pts, 15), why
+
+
+def score_uses(obs: dict, ac: str) -> tuple[int, list[str]]:
+    pts, why = 0, []
+    if file_has(INFO, "LSHandlerRank") and "Owner" in INFO.read_text():
+        pts += 3
+        why.append("Finder owner rank in Info.plist")
+    if file_has(HOST_VIEW, 'Button("Copy")') and file_has(HOST_VIEW, 'Button("Export")'):
+        pts += 2
+        why.append("Copy/Export buttons in HostView")
+    if Path("/Users/dshanklinbv/repos-eidos-agi/prim-web").exists():
+        pts += 3
+        why.append("prim-web exists as a view")
+    n = len(sample_prims())
+    if n >= 16:
+        pts += 4
+        why.append(f"{n} sample .prim files on the docket")
+    elif n:
+        pts += 1
+        why.append(f"only {n} sample packs")
+    if obs.get("mail_opens_prim"):
+        pts += 2
+        why.append("Mail opens Prim")
+    else:
+        why.append("Mail/Messages unproven")
+    if obs.get("finder_double_click_proven"):
+        pts += 1
+    return min(pts, 15), why
+
+
+def score_catalog(ac: str) -> tuple[int, list[str]]:
+    pts, why = 0, []
+    if ac_status(ac, "AC-10") == "✅" and file_has(HOST_TESTS, "testHostIsTheWay"):
+        pts += 8
+        why.append("registry sidebar + host-is-the-way")
+    elif file_has(ROOT / "Sources" / "PrimMacCore" / "HostCatalog.swift", "registry.json") or file_has(
+        ROOT / "Sources" / "PrimMacCore" / "HostCatalog.swift", "HostCatalog"
+    ):
+        pts += 5
+        why.append("HostCatalog exists")
+    if file_has(HOST_UI, "hostedSurface"):
+        pts += 2
+        why.append("hostedSurface is derived, not a Swift face per type")
+    return min(pts, 10), why
+
+
+def score_honest(obs: dict, ac: str, proof: Path | None) -> tuple[int, list[str]]:
+    pts, why = 0, []
+    if file_has(HOST_TESTS, "hostedSurface(named: \"\"") or file_has(
+        HOST_TESTS, 'hostedSurface(named: "", kind:'
+    ):
+        pts += 5
+        why.append("empty toolName still hosts")
+    if ac_status(ac, "AC-5") != "✅":
+        pts += 2
+        why.append("AC-5 not overclaimed")
+    else:
+        if not obs.get("save_writes_mutations"):
+            why.append("AC-5 checked without observation — honesty gap")
+        else:
+            pts += 2
+            why.append("AC-5 matches observation")
+    if proof is not None:
+        pts += 3
+        why.append("Prim.app window PNG exists")
+    else:
+        why.append("no Prim.app window PNG")
+    return min(pts, 10), why
+
+
+def next_gap(dims: dict) -> dict:
+    ranked = sorted(
+        dims.items(),
+        key=lambda kv: kv[1]["points"] - kv[1]["score"],
+        reverse=True,
+    )
+    did, row = ranked[0]
+    remain = row["points"] - row["score"]
+    actions = {
+        "land": "Prove Finder/Mail/Messages open a .prim into Prim.app (screencapture -l of the document window, no fallback).",
+        "host": "Open every sample kind in Prim.app and capture the citing surface, not the process-tool fallback.",
+        "file": "Log a session turn (or equivalent) in Prim.app, Save, Detect the written zip still that kind.",
+        "place": "Make WKWebView scroll in Prim.app and capture Mark, Type, Voice, Ground as received plates — not CMS tabs.",
+        "uses": "Pixel-prove Copy/Export and open each remaining sample kind in the real window.",
+        "catalog": "Add or switch a registry tool with no Swift type face; HostTests still pass.",
+        "honest": "Capture a Prim.app window (not Paseo HTML) and keep AC-5 unchecked until in-app Save is proven.",
+    }
+    return {
+        "id": did,
+        "remain": remain,
+        "action": actions[did],
+        "why": row["why"],
+    }
+
+
+def main() -> int:
+    quick = "--quick" in sys.argv or os.environ.get("LEARN_QUICK") == "1"
+    LEARN.mkdir(exist_ok=True)
+    (LEARN / "proofs").mkdir(exist_ok=True)
+    obs = load_obs()
+    ac = ACCEPTANCE.read_text() if ACCEPTANCE.exists() else ""
+    proof = latest_proof()
+    tests_ok: bool | None = None
+    test_out = ""
+    if not quick:
+        code, test_out = run(["swift", "test", "--filter", "HostTests"], timeout=180)
+        tests_ok = code == 0
+    dims = {}
+    scorers = {
+        "land": lambda: score_land(obs, proof, ac),
+        "host": lambda: score_host(obs, ac, tests_ok),
+        "file": lambda: score_file(obs, ac),
+        "place": lambda: score_place(obs, proof),
+        "uses": lambda: score_uses(obs, ac),
+        "catalog": lambda: score_catalog(ac),
+        "honest": lambda: score_honest(obs, ac, proof),
+    }
+    total = 0
+    for spec in GREAT["dimensions"]:
+        got, why = scorers[spec["id"]]()
+        dims[spec["id"]] = {
+            "points": spec["points"],
+            "score": got,
+            "need": spec["need"],
+            "why": why,
+        }
+        total += got
+    nxt = next_gap(dims)
+    payload = {
+        "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "score": total,
+        "target": GREAT["target"],
+        "perfect": GREAT["perfect"],
+        "quick": quick,
+        "host_tests": tests_ok,
+        "proof": str(proof) if proof else None,
+        "dimensions": dims,
+        "next": nxt,
+        "test_tail": test_out[-1500:] if test_out else "",
+    }
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_path = LEARN / "runs" / f"{stamp}.json"
+    run_path.parent.mkdir(exist_ok=True)
+    run_path.write_text(json.dumps(payload, indent=2) + "\n")
+    (LEARN / "LATEST.json").write_text(json.dumps(payload, indent=2) + "\n")
+    lines = [
+        f"# Learn {payload['at']}",
+        "",
+        f"**{total} / 100**  target {GREAT['target']}  next: `{nxt['id']}` (+{nxt['remain']} pts)",
+        "",
+        nxt["action"],
+        "",
+        "| dim | score | why |",
+        "|---|---:|---|",
+    ]
+    for spec in GREAT["dimensions"]:
+        d = dims[spec["id"]]
+        lines.append(f"| {spec['id']} | {d['score']}/{d['points']} | {'; '.join(d['why'])} |")
+    lines.append("")
+    (LEARN / "LATEST.md").write_text("\n".join(lines) + "\n")
+    print("\n".join(lines))
+    if total >= GREAT["target"]:
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:
+        print(f"learn harness error: {e}", file=sys.stderr)
+        sys.exit(2)

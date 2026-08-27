@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "learn": {
+      "command": "python3 scripts/learn"
+    },
+    "capture-window": {
+      "command": "zsh scripts/capture-window"
+    }
+  }
+}

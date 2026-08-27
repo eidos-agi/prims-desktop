@@ -1,0 +1,73 @@
+#!/bin/zsh
+set -euo pipefail
+# Capture a Prim.app document window. Proof that counts for GREAT land/place.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/.learn/proofs"
+mkdir -p "$OUT"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+png="$OUT/window-$stamp.png"
+label="${1:-}"
+
+python3 - "$png" "$stamp" "$OUT" "$label" <<'PY'
+import json, subprocess, sys
+from pathlib import Path
+
+png, stamp, out, label = sys.argv[1], sys.argv[2], Path(sys.argv[3]), sys.argv[4]
+try:
+    import Quartz
+except ImportError:
+    sys.exit("Quartz missing — capture-window needs pyobjc-framework-Quartz")
+
+opts = Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements
+wins = Quartz.CGWindowListCopyWindowInfo(opts, Quartz.kCGNullWindowID) or []
+cands = []
+for w in wins:
+    if w.get("kCGWindowOwnerName") not in ("Prim", "Prims Desktop"):
+        continue
+    bounds = w.get("kCGWindowBounds") or {}
+    if (bounds.get("Width") or 0) < 200 or (bounds.get("Height") or 0) < 200:
+        continue
+    name = w.get("kCGWindowName") or ""
+    layer = w.get("kCGWindowLayer") or 0
+    cands.append((layer, name, int(w["kCGWindowNumber"]), bounds))
+if not cands:
+    sys.exit("no on-screen Prim.app windows")
+# Prefer a .prim document; optional label substring; typical 900×592
+# document over a leftover restored window; tiny newest-id tiebreak.
+def score(item):
+    layer, name, wid, bounds = item
+    w = float(bounds.get("Width") or 0)
+    h = float(bounds.get("Height") or 0)
+    s = 0.0
+    if ".prim" in name:
+        s += 100
+    if label and label.lower() in name.lower():
+        s += 200
+    if 850 <= w <= 980 and 520 <= h <= 640:
+        s += 40
+    s += wid / 1e9
+    s -= layer * 10
+    return s
+cands.sort(key=score, reverse=True)
+_layer, title, wid, bounds = cands[0]
+r = subprocess.run(["screencapture", "-l", str(wid), "-x", png], capture_output=True, text=True)
+if r.returncode != 0:
+    sys.exit(r.stderr or f"screencapture -l {wid} failed")
+meta = {
+    "at": stamp,
+    "window_id": wid,
+    "title": title,
+    "png": png,
+    "bytes": Path(png).stat().st_size,
+    "bounds": {
+        "X": float(bounds.get("X") or 0),
+        "Y": float(bounds.get("Y") or 0),
+        "Width": float(bounds.get("Width") or 0),
+        "Height": float(bounds.get("Height") or 0),
+    },
+}
+(out / f"window-{stamp}.json").write_text(json.dumps(meta, indent=2) + "\n")
+print(png)
+print(json.dumps(meta))
+PY
+echo "Inspect the PNG, then update .learn/observations.json from what you saw — not from this script."

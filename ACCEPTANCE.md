@@ -1,0 +1,28 @@
+# Prim.app acceptance
+
+Status: 🔧 M1 host proven in tests + signed app · ⬜ edit-export of in-memory mutations · 🔧 OBIF cover + later plates seen in Prim.app (jump, not Page Down) · ⬜ mutation Save / Mail
+
+Loop: `LEARN.md`. Score: `scripts/learn` → `.learn/LATEST.md`. Target: 90 on `GREAT.md`.
+
+- ✅ **AC-1 Document host.** Prim.app is a macOS document app for `.prim` (UTI `com.eidosagi.prim`). Verify: `Info.plist` + `~/Applications/Prim.app` signed `Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM)`.
+- ✅ **AC-2 All types.** Every sample pack detects a kind and has ≥1 citing surface tool. Verify: `swift test` `testEverySampleHasACitingSurface` (16 packs, 16 types).
+- ✅ **AC-3 All tools.** Surfaces that cite the kind are listed. Verify: `HostCatalog.surfaces` in the same test (log → `log-editor`).
+- 🔧 **AC-4 Open / view.** Opening a sample hosts the citing editor. Verify: `open -a Prim` a sample; `screencapture -l` of that window — not Paseo HTML. Partial: `prim.obif.prim` cover (lockup + “Send me the prim”) on 2026-08-20 window 46990. Still due: emf and the other kinds.
+- 🔧 **AC-5 Edit → Save mutations.** Editor onChange exports the zip into `document.data`; File → Save writes it. Verify: `exportFiles` writes turns/slides; `testExportMutationStaysTheKind`; log a session turn in Prim.app then Save.
+- ✅ **AC-6 Save As identity.** Save As of an opened pack still detects the same kind. Verify: `testSaveAsKeepsKind`.
+- ✅ **AC-7 New.** Untitled seeds a valid pack per registry type. Verify: `testNewPackDetectsEveryRegistryType`.
+- 🔧 **AC-8 Copy / Export.** Toolbar Copy and Export write the held pack. Verify: buttons present in HostView; pixel proof pending screenshot.
+- ✅ **AC-9 The way.** `prim-mac` is the registered Mac host (`as: host`, cites `*`). It does not appear as a type-specific picker tool. Verify: `testHostIsTheWay`; `prim registry tool prim-mac`.
+- ✅ **AC-10 Registry sidebar.** Collapsible sidebar lists types, surfaces, connectors, and hosts from `registry.json`. Connectors cite a type and run locally (webmcp in-host, process tools via `bin`). Verify: `testRegistryListsConnectors`.
+- 🔧 **AC-11 Window proof is Prim.app.** Pixel proof for land/place is `scripts/capture-window` (or `screencapture -l`) of a Prim document window. Paseo HTML and `127.0.0.1:8799` do not count. Verify: `.learn/proofs/window-*.png` whose title contains `.prim`.
+- 🔧 **AC-12 OBIF as a place.** Cover, mark, type, voice, ground exist as one book in Prim.app. No COVER stamp, no CMS tabs. Verify: `obif-cover.png`, `window-20260820T143319Z.png` (mark), `obif-type.png`, `obif-voice.png`, `obif-ground.png`. Reached via `primGoto` / `?chapter=` on the rail scrollport, not yet by Page Down.
+- 🔧 **AC-13 WKWebView scroll.** The hosted editor’s paper shows a scrollbar; later plates are different scroll positions of that folio. Page Down / HID-wheel before-after on `prim.obif.prim` still showed Cover. Verify: named plate PNGs above; do not cite `obif-after-pagedown.png` until it differs from Cover.
+- ⬜ **AC-14 Mail / Messages.** A `.prim` attachment opens Prim.app on the citing tool. Verify: drop a sample on Mail → Open With Prim; window capture.
+
+- ⬜ **AC-15 Memory container boundary.** Only prims in the Prims Desktop container (drag-in or user-approved add) are agent-visible/operable; prims outside are not. Verify: unit or host test for container membership gate; no agent path bypasses it.
+- ⬜ **AC-16 Approve to add.** Agent request-add shows in-app approval chrome; user confirm admits the pack (and optional hierarchy node). Verify: request → pending → approve → pack appears in container; deny leaves it out.
+- ⬜ **AC-17 Hierarchies.** Container supports nested groups of packs. Verify: add child under a folder/node; open still hosts the citing tool.
+- ⬜ **AC-18 Document-first chrome.** Default face is the open pack / memory work surface; registry sidebar is secondary (collapsed or detail-only by default). Verify: window capture of open pack without registry dominating.
+- ⬜ **AC-19 ACP-directed viewer.** In-app chat (ACP) to the user's Grok or Cursor agent can direct the hosted Prim viewer; subscription is the user's regular AI plan. Verify: agent command changes viewer state on an open pack; pack bytes remain the store.
+- 🔧 **AC-20 chat.db Prim Tool.** Local overlay connector `imessage-chatdb-receive` (kind connector, as `chatdb-sqlite`, cites `*`) is listed in Prims Desktop and runs in-process `ChatDB.swift`. The old `~/.local/bin/imessage-chatdb-receive` wrapper may remain. Verify: overlay JSON still has `opff-dally-receive`; `codesign -dv` TeamIdentifier `Y6CQ4SWPWM`.
+- ✅ **AC-21 App CLI.** `prims-desktop` on `PATH` (`~/.local/bin`) lists merged connectors, statuses iMessage chat.db/FDA, receives via PrimMacCore ChatDB, opens the app, and doctors overlay/app/team/chat.db. Verify: `which prims-desktop`; `prims-desktop connectors`; `prims-desktop status imessage-chatdb-receive`; `prims-desktop receive imessage-chatdb-receive --limit 3`; `prims-desktop doctor`. Proven 2026-08-26: chat.db readable, TeamIdentifier `Y6CQ4SWPWM`, overlay still lists `opff-dally-receive`. `config set` must not wipe `opff-dally-receive`.

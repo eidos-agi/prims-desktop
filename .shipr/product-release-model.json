@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "role": "ai_config_and_memory",
+  "purpose": "How Prim.app ships. Load this file. Shipr does not execute.",
+  "product_id": "prim-mac",
+  "project_root": "/Users/dshanklinbv/repos-eidos-agi/prim-mac",
+  "description": "Mac document host. Company ship is Developer ID + notarize + staple into ~/Applications/Prim.app. Not Railway. Practice lives in eidos-desktop-app-builder.",
+  "artifact_types": ["macos-app"],
+  "distribution_channels": ["local-applications", "developer-id"],
+  "proof_commands": [
+    "swift test --filter HostTests",
+    "codesign --verify --deep --strict \"$HOME/Applications/Prim.app\"",
+    "sh -c 'codesign -dv --verbose=4 \"$HOME/Applications/Prim.app\" 2>&1 | grep -q \"TeamIdentifier=Y6CQ4SWPWM\"'"
+  ],
+  "proof_source": "testr",
+  "proof_command_notes": "Path-relevant only. spctl -a is a ship gate, not a unit test. Rejected Unnotarized Developer ID means blocked, not shipped.",
+  "related_testr": {
+    "operator": "testr",
+    "model_path": ".testr/product-test-model.json",
+    "loaded": true
+  },
+  "forbidden": [
+    "ad-hoc codesign",
+    "Eidos AGI Local Dev as the ship identity",
+    "personal team LJWV44N8BF",
+    "overwrite ~/Applications/Prim.app without a timestamped backup",
+    "mint prim.surface or prim.connector as pack types",
+    "claim shipped before spctl accepts notarized Developer ID",
+    "Railway",
+    "notary secrets in git"
+  ],
+  "approval_gates": [
+    "overwrite ~/Applications/Prim.app",
+    "notarytool submit + stapler staple",
+    "public GitHub create/push",
+    "Finder first-launch after identity change"
+  ],
+  "rollback_paths": [
+    "restore the timestamped Prim.app backup, lsregister -f"
+  ],
+  "five_step_rule": "1 load this model 2 path-relevant proofs 3 bash scripts/build.sh (Developer ID Y6CQ4SWPWM) 4 notarize+staple before it leaves the Mac 5 shipr attempt — shipped only when spctl accepts",
+  "human_surface": "finder",
+  "app": {
+    "name": "Prim",
+    "note": "Document app. open -a Prim a .prim. No HTTP health. Install is ~/Applications/Prim.app. Ship identity is Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM).",
+    "build": ["bash", "scripts/build.sh"],
+    "start": ["open", "-a", "Prim"]
+  },
+  "plugins": {
+    "testr": {
+      "id": "testr",
+      "channel": "proofs",
+      "cli": "testr",
+      "note": "Prim.app proofs. Sibling of this file."
+    },
+    "railguey": {
+      "id": "railguey",
+      "channel": "none",
+      "cli": "railguey",
+      "skip": true,
+      "note": "Prim.app does not ship on Railway. Do not railguey this repo."
+    },
+    "clawdflare": {
+      "id": "clawdflare",
+      "channel": "none",
+      "cli": "clawdflare",
+      "skip": true,
+      "note": "No DNS. The public web host is prim-web."
+    }
+  },
+  "observe": {
+    "note": "No Railway. No live /health.revision. Shipped means stapled + spctl accepts on a copied .app. Practice: eidos-desktop-app-builder."
+  },
+  "learning_questions": [
+    "Did build.sh sign Local Dev instead of LLC?",
+    "Did we claim shipped while spctl said Unnotarized Developer ID?",
+    "Was ~/Applications/Prim.app replaced without a backup?"
+  ],
+  "memory_paths": {
+    "model": ".shipr/product-release-model.json",
+    "attempts_dir": ".shipr/release-attempts"
+  }
+}

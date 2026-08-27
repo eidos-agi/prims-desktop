@@ -1,0 +1,96 @@
+{
+  "at": "2026-08-20T16:04:05Z",
+  "score": 87,
+  "target": 90,
+  "perfect": 100,
+  "quick": false,
+  "host_tests": true,
+  "proof": "/Users/dshanklinbv/repos-eidos-agi/prim-mac/.learn/proofs/obif-after-pagedown.png",
+  "dimensions": {
+    "land": {
+      "points": 20,
+      "score": 16,
+      "need": "Double-click / Mail / Messages / open -a Prim land on the citing tool, not a zip or fallback.",
+      "why": [
+        "Prim.app installed",
+        "UTI + document type",
+        "empty toolName hosts obif-editor (unit)",
+        "window proof obif-after-pagedown.png and no fallback",
+        "Finder double-click unproven"
+      ]
+    },
+    "host": {
+      "points": 15,
+      "score": 15,
+      "need": "Every registered type hosts; every citing surface and connector is choosable.",
+      "why": [
+        "AC-2 all types",
+        "AC-3 citing surfaces listed",
+        "HostTests passed"
+      ]
+    },
+    "file": {
+      "points": 15,
+      "score": 9,
+      "need": "Save writes the zip; mutations export into document.data; no sidecar.",
+      "why": [
+        "AC-6 Save As identity",
+        "mutation export keeps kind (unit)",
+        "AC-5 in-app mutation Save unproven"
+      ]
+    },
+    "place": {
+      "points": 15,
+      "score": 15,
+      "need": "Surfaces are received documents. OBIF is one scrolling book in the Prim.app window.",
+      "why": [
+        "folios.js is one book, not tabs",
+        "cover visible in Prim.app, no COVER stamp",
+        "4/4 later plates seen in app",
+        "scroll does not yet move the WKWebView"
+      ]
+    },
+    "uses": {
+      "points": 15,
+      "score": 12,
+      "need": "Finder default, Copy/Export, agent path, website is a view, every sample kind opens.",
+      "why": [
+        "Finder owner rank in Info.plist",
+        "Copy/Export buttons in HostView",
+        "prim-web exists as a view",
+        "17 sample .prim files on the docket",
+        "Mail/Messages unproven"
+      ]
+    },
+    "catalog": {
+      "points": 10,
+      "score": 10,
+      "need": "registry.json is the catalog; no native face per type.",
+      "why": [
+        "registry sidebar + host-is-the-way",
+        "hostedSurface is derived, not a Swift face per type"
+      ]
+    },
+    "honest": {
+      "points": 10,
+      "score": 10,
+      "need": "No pretence that editor memory is the file. Pixel proof is Prim.app, not a demo tab.",
+      "why": [
+        "empty toolName still hosts",
+        "AC-5 not overclaimed",
+        "Prim.app window PNG exists"
+      ]
+    }
+  },
+  "next": {
+    "id": "file",
+    "remain": 6,
+    "action": "Log a session turn (or equivalent) in Prim.app, Save, Detect the written zip still that kind.",
+    "why": [
+      "AC-6 Save As identity",
+      "mutation export keeps kind (unit)",
+      "AC-5 in-app mutation Save unproven"
+    ]
+  },
+  "test_tail": "se '-[PrimMacTests.HostTests testNoMintedToolTypes]' started.\nTest Case '-[PrimMacTests.HostTests testNoMintedToolTypes]' passed (0.006 seconds).\nTest Case '-[PrimMacTests.HostTests testOpeningObifHostsTheEditor]' started.\nTest Case '-[PrimMacTests.HostTests testOpeningObifHostsTheEditor]' passed (0.058 seconds).\nTest Case '-[PrimMacTests.HostTests testRegistryListsConnectors]' started.\nTest Case '-[PrimMacTests.HostTests testRegistryListsConnectors]' passed (0.000 seconds).\nTest Case '-[PrimMacTests.HostTests testSaveAsKeepsKind]' started.\nTest Case '-[PrimMacTests.HostTests testSaveAsKeepsKind]' passed (0.113 seconds).\nTest Suite 'HostTests' passed at 2026-08-20 11:04:05.922.\n\t Executed 8 tests, with 0 failures (0 unexpected) in 3.261 (3.262) seconds\nTest Suite 'PrimMacPackageTests.xctest' passed at 2026-08-20 11:04:05.922.\n\t Executed 8 tests, with 0 failures (0 unexpected) in 3.261 (3.262) seconds\nTest Suite 'Selected tests' passed at 2026-08-20 11:04:05.922.\n\t Executed 8 tests, with 0 failures (0 unexpected) in 3.261 (3.265) seconds\n\u25c7 Test run started.\n\u21b3 Testing Library Version: 1902\n\u21b3 Target Platform: arm64e-apple-macos14.0\n\u2714 Test run with 0 tests in 0 suites passed after 0.001 seconds.\n[0/1] Planning build\nBuilding for debugging...\n[0/5] Write sources\n[1/5] Write swift-version--58304C5D6DBC2206.txt\n[3/6] Emitting module PrimMac\n[4/6] Compiling PrimMac ToolWebView.swift\n[4/7] Write Objects.LinkFileList\n[5/7] Linking PrimMac\n[6/7] Applying PrimMac\nBuild complete! (3.60s)\n"
+}

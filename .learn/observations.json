@@ -1,0 +1,15 @@
+{
+  "obif_cover_visible": true,
+  "obif_no_cover_stamp": true,
+  "obif_no_fallback": true,
+  "obif_mark_in_app": true,
+  "obif_type_in_app": true,
+  "obif_voice_in_app": true,
+  "obif_ground_in_app": true,
+  "scroll_moves_webview": false,
+  "save_writes_mutations": false,
+  "mail_opens_prim": false,
+  "messages_opens_prim": false,
+  "finder_double_click_proven": false,
+  "notes": "LOOK-0002: later plates are jumps (primGoto), not a walk. Cover: obif-cover.png. Mark: window-20260820T143319Z.png / obif-mark.png. Type: obif-type.png. Voice: obif-voice.png. Ground: obif-ground.png. Page Down / HID wheel stayed on Cover (window-20260820T144231Z.png vs window-20260820T144235Z.png, same 133658 bytes, window 55057). Do not treat AC-13 as done. scroll_moves_webview false until a same-window after-PNG differs."
+}

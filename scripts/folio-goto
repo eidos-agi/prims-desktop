@@ -1,0 +1,43 @@
+#!/bin/zsh
+set -euo pipefail
+# Jump an open Prim.app folio, or reopen with a chapter.
+# Usage: folio-goto [cover|mark|type|voice|ground|next]
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PACK="${PRIM_PACK:-/Users/dshanklinbv/repos-eidos-agi/prim-web/demo/docket/prim.obif.prim}"
+chapter="${1:-next}"
+
+if [[ "${chapter}" == "next" ]]; then
+  pack_name="$(basename "$PACK")"
+  osascript - "$pack_name" <<'APPLESCRIPT'
+on run argv
+  set packName to item 1 of argv
+  tell application "System Events"
+    if not (exists process "Prim") then error "Prim.app is not running"
+    tell process "Prim"
+      set frontmost to true
+      set picked to false
+      repeat with w in windows
+        try
+          if name of w contains packName then
+            perform action "AXRaise" of w
+            set picked to true
+            exit repeat
+          end if
+        end try
+      end repeat
+      delay 0.25
+      key code 121
+    end tell
+  end tell
+end run
+APPLESCRIPT
+  echo "pagedown $pack_name"
+  exit 0
+fi
+
+defaults write com.eidosagi.prim gotoChapter "$chapter"
+osascript -e 'tell application "Prim" to quit' >/dev/null 2>&1 || true
+sleep 0.5
+open -a Prim "$PACK"
+echo "opened $PACK chapter=$chapter"
+echo "Wait for the folio, then scripts/capture-window. Clear with: defaults delete com.eidosagi.prim gotoChapter"

@@ -1,0 +1,50 @@
+{
+  "blocker_records": [],
+  "blockers": [],
+  "created_at": "2026-08-20T05:40:40.678182Z",
+  "gate_summary": [],
+  "goal": "Company-sign Prim.app as Eidos AGI LLC Developer ID",
+  "learning_prompts": [
+    "Did build.sh sign Local Dev instead of LLC?",
+    "Did we claim shipped while spctl said Unnotarized Developer ID?",
+    "Was ~/Applications/Prim.app replaced without a backup?"
+  ],
+  "next_actions": [
+    "clear the blocker, then re-run the product's proof_commands (AI runs them; shipr only records)"
+  ],
+  "notes": "Signed Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM), hardened runtime, timestamp. spctl rejected: Unnotarized Developer ID. eidos-notary keychain profile missing. No git remote. Not shipped.",
+  "product_id": "prim-mac",
+  "proofs": [
+    "Authority=Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM)",
+    "TeamIdentifier=Y6CQ4SWPWM flags=runtime",
+    "spctl: rejected source=Unnotarized Developer ID"
+  ],
+  "release_model_snapshot": {
+    "approval_gates": [
+      "overwrite ~/Applications/Prim.app",
+      "notarytool submit + stapler staple",
+      "public GitHub create/push",
+      "Finder first-launch after identity change"
+    ],
+    "artifact_types": [
+      "macos-app"
+    ],
+    "distribution_channels": [
+      "local-applications",
+      "developer-id"
+    ],
+    "forge_stack": null,
+    "license": null,
+    "open_source_status": null,
+    "proof_commands": [
+      "swift test --filter HostTests",
+      "codesign --verify --deep --strict \"$HOME/Applications/Prim.app\"",
+      "sh -c 'codesign -dv --verbose=4 \"$HOME/Applications/Prim.app\" 2\u003e\u00261 | grep -q \"TeamIdentifier=Y6CQ4SWPWM\"'"
+    ],
+    "proof_source": "testr",
+    "repository_visibility": null
+  },
+  "schema_version": 1,
+  "source": null,
+  "status": "blocked"
+}

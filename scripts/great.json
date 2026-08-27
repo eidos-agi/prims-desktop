@@ -1,0 +1,41 @@
+{
+  "target": 90,
+  "perfect": 100,
+  "dimensions": [
+    {
+      "id": "land",
+      "points": 20,
+      "need": "Double-click / Mail / Messages / open -a Prim land on the citing tool, not a zip or fallback."
+    },
+    {
+      "id": "host",
+      "points": 15,
+      "need": "Every registered type hosts; every citing surface and connector is choosable."
+    },
+    {
+      "id": "file",
+      "points": 15,
+      "need": "Save writes the zip; mutations export into document.data; no sidecar."
+    },
+    {
+      "id": "place",
+      "points": 15,
+      "need": "Surfaces are received documents. OBIF is one scrolling book in the Prim.app window."
+    },
+    {
+      "id": "uses",
+      "points": 15,
+      "need": "Finder default, Copy/Export, agent path, website is a view, every sample kind opens."
+    },
+    {
+      "id": "catalog",
+      "points": 10,
+      "need": "registry.json is the catalog; no native face per type."
+    },
+    {
+      "id": "honest",
+      "points": 10,
+      "need": "No pretence that editor memory is the file. Pixel proof is Prim.app, not a demo tab."
+    }
+  ]
+}

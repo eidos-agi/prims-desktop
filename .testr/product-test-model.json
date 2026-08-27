@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "role": "ai_config_and_memory",
+  "purpose": "How Prim.app is proven. testr does not run tests.",
+  "product_id": "prim-mac",
+  "project_root": "/Users/dshanklinbv/repos-eidos-agi/prim-mac",
+  "description": "Mac document host. Registry + Detect + HostTests. The pack stays the file.",
+  "test_commands": [
+    "swift test --filter HostTests",
+    "codesign --verify --deep --strict \"$HOME/Applications/Prim.app\"",
+    "sh -c 'codesign -dv --verbose=4 \"$HOME/Applications/Prim.app\" 2>&1 | grep -q \"TeamIdentifier=Y6CQ4SWPWM\"'"
+  ],
+  "test_suites": ["host-unit", "codesign-verify", "llc-team"],
+  "evidence_paths": [
+    "swift test HostTests 6/6",
+    "codesign --verify --deep --strict",
+    "TeamIdentifier=Y6CQ4SWPWM"
+  ],
+  "related_shipr": {
+    "operator": "shipr",
+    "model_path": ".shipr/product-release-model.json",
+    "loaded": true
+  },
+  "learning_questions": [
+    "Did HostTests miss a registry type with no citing surface?",
+    "Did a rebuild leave TeamIdentifier unset (Local Dev)?",
+    "Did prim-mac appear in surfaces(citing:) as if it were a type tool?"
+  ],
+  "memory_paths": {
+    "model": ".testr/product-test-model.json",
+    "attempts_dir": ".testr/test-attempts"
+  }
+}
