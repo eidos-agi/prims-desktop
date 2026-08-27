@@ -11,6 +11,7 @@ if ! command -v prims-desktop >/dev/null 2>&1; then
   exit 1
 fi
 
+python3 "$ROOT/scripts/litmus.py"
 prims-desktop asmp
 prims-desktop doctor
 prims-desktop connectors
