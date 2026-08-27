@@ -52,7 +52,7 @@ public enum HostUI: Sendable {
         return tool.as == "sim" || (tool.bin != nil && tool.as != "host" && !embedsInWeb(tool))
     }
 
-    /// Connector the signed host runs itself (chat.db). Not a spawned helper.
+    /// Connector the signed host runs itself (chat.db). Reader is the app or Contents/Helpers.
     public static func isInHost(_ tool: PrimTool) -> Bool {
         tool.as == "chatdb-sqlite" || tool.name == "imessage-chatdb-receive"
     }

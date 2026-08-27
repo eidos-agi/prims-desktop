@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "PrimMacCore", targets: ["PrimMacCore"]),
         .executable(name: "PrimMac", targets: ["PrimMac"]),
         .executable(name: "prims-desktop", targets: ["PrimsDesktopCLI"]),
+        .executable(name: "imessage-chatdb-receive", targets: ["IMessageChatDBReceive"]),
     ],
     dependencies: [
         .package(path: "../prim-sim"),
@@ -45,6 +46,17 @@ let package = Package(
                 .product(name: "PrimSimCore", package: "prim-sim"),
             ],
             path: "Sources/PrimsDesktopCLI",
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedLibrary("sqlite3"),
+            ]
+        ),
+        .executableTarget(
+            name: "IMessageChatDBReceive",
+            dependencies: [
+                "PrimMacCore",
+            ],
+            path: "Sources/IMessageChatDBReceive",
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedLibrary("sqlite3"),

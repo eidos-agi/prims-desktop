@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Prims Desktop — Full Disk Access PPPC (Defender fulldisk.mobileconfig shape).
+
+  Identifier is the app bundle id, not the pack UTI.
+    bundle id: sh.prims.desktop
+    pack UTI:  com.eidosagi.prim   (do not put the pack UTI here)
+
+  CodeRequirement is intentionally a placeholder. Do not invent a requirement.
+  After this Mac signs the app, fill it from:
+
+    codesign -dr - "/Applications/Prims Desktop.app"
+
+  Paste the designated requirement (the text after "designated =>") into
+  the CodeRequirement string below. Then resign/reinstall this profile.
+-->
+<plist version="1">
+<dict>
+	<key>PayloadUUID</key>
+	<string>BCA56185-3102-42CA-B1C4-986A3A51DA1F</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadOrganization</key>
+	<string>Eidos AGI LLC</string>
+	<key>PayloadIdentifier</key>
+	<string>sh.prims.desktop.tcc.fulldiskaccess</string>
+	<key>PayloadDisplayName</key>
+	<string>Prims Desktop - Full Disk Access</string>
+	<key>PayloadDescription</key>
+	<string>Grants Full Disk Access to Prims Desktop (sh.prims.desktop). Fill CodeRequirement from `codesign -dr - "/Applications/Prims Desktop.app"` on the signed app. Do not invent a requirement.</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>PayloadEnabled</key>
+	<true/>
+	<key>PayloadRemovalDisallowed</key>
+	<true/>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadUUID</key>
+			<string>DD023C6C-5592-4D40-A1E7-5F59DF713553</string>
+			<key>PayloadType</key>
+			<string>com.apple.TCC.configuration-profile-policy</string>
+			<key>PayloadOrganization</key>
+			<string>Eidos AGI LLC</string>
+			<key>PayloadIdentifier</key>
+			<string>DD023C6C-5592-4D40-A1E7-5F59DF713553</string>
+			<key>PayloadDisplayName</key>
+			<string>Privacy Preferences Policy Control</string>
+			<key>PayloadDescription</key>
+			<string/>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadEnabled</key>
+			<true/>
+			<key>Services</key>
+			<dict>
+				<key>SystemPolicyAllFiles</key>
+				<array>
+					<dict>
+						<key>Identifier</key>
+						<string>sh.prims.desktop</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+						<key>CodeRequirement</key>
+						<string>identifier &quot;sh.prims.desktop&quot; and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = Y6CQ4SWPWM</string>
+						<key>StaticCode</key>
+						<integer>0</integer>
+						<key>Allowed</key>
+						<integer>1</integer>
+					</dict>
+				</array>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

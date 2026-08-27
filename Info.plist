@@ -9,7 +9,7 @@
 	<key>CFBundleExecutable</key>
 	<string>Prim</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.eidosagi.prim</string>
+	<string>sh.prims.desktop</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -64,6 +64,7 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>prim</string>
+					<string>prim.zip</string>
 				</array>
 				<key>public.mime-type</key>
 				<array>

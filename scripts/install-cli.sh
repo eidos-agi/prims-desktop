@@ -1,32 +1,40 @@
 #!/bin/bash
-# Build, Developer ID sign, and install prims-desktop to ~/.local/bin.
-# Does not rebuild Prims Desktop.app.
+# Install a PATH trampoline that execs the in-bundle CLI helper.
+# Does not copy ChatDB. Does not sign the PATH trampoline as a TCC principal.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT="$(realpath "$ROOT")"
 DEST="$HOME/.local/bin"
-TEAM="Y6CQ4SWPWM"
-IDENTITY="Developer ID Application: Eidos AGI LLC ($TEAM)"
+APP="/Applications/Prims Desktop.app"
+HELPER="$APP/Contents/Helpers/prims-desktop"
+TRAMPOLINE="$ROOT/scripts/prims-desktop-trampoline.sh"
 
-cd "$ROOT"
-swift build -c release --product prims-desktop
-BIN="$ROOT/.build/release/prims-desktop"
-
-mkdir -p "$DEST"
-cp "$BIN" "$DEST/prims-desktop"
-
-security find-certificate -c "$IDENTITY" >/dev/null 2>&1 || {
-  echo "FATAL: $IDENTITY not in keychain." >&2
+if [[ ! -x "$HELPER" ]]; then
+  echo "FATAL: in-bundle CLI missing at $HELPER" >&2
+  echo "Assemble and sign the app first: ./scripts/build.sh" >&2
   exit 1
-}
-codesign --force --options runtime --timestamp --sign "$IDENTITY" "$DEST/prims-desktop"
-
-actual="$(codesign -dv --verbose=4 "$DEST/prims-desktop" 2>&1 | awk -F= '/^TeamIdentifier=/{print $2; exit}')"
-if [[ "$actual" != "$TEAM" ]]; then
-  echo "FATAL: TeamIdentifier is '$actual', expected $TEAM" >&2
+fi
+if [[ ! -f "$TRAMPOLINE" ]]; then
+  echo "FATAL: missing $TRAMPOLINE" >&2
   exit 1
 fi
 
+mkdir -p "$DEST"
+# Replace a leftover Mach-O TCC client with the trampoline.
+rm -f "$DEST/prims-desktop"
+cp "$TRAMPOLINE" "$DEST/prims-desktop"
+chmod 755 "$DEST/prims-desktop"
 ln -sfn prims-desktop "$DEST/prim-desktop"
-echo "installed $DEST/prims-desktop"
+
+if grep -q 'ChatDB\|chat\.db\|sqlite3_open' "$DEST/prims-desktop"; then
+  echo "FATAL: trampoline must not contain ChatDB read code" >&2
+  exit 1
+fi
+if file "$DEST/prims-desktop" | grep -qi 'Mach-O'; then
+  echo "FATAL: ~/.local/bin/prims-desktop is a Mach-O — it must be a trampoline script" >&2
+  exit 1
+fi
+
+echo "installed trampoline $DEST/prims-desktop"
+echo "execs     $HELPER"
 echo "linked    $DEST/prim-desktop -> prims-desktop"

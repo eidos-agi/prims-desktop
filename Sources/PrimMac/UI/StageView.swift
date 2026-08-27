@@ -66,7 +66,7 @@ struct StageView: View {
             EmptyStage(
                 icon: "message.fill",
                 title: "See your messages",
-                detail: "Grant Full Disk Access to read Messages on this Mac. macOS will not prompt on its own."
+                detail: ProductIdentity.fdaNote
             ) {
                 Button("Grant Full Disk Access…") { desk.grantFDA() }
                     .keyboardShortcut(.defaultAction)

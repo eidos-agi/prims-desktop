@@ -1,31 +1,21 @@
 #!/bin/bash
-# Compile chatdb-extract (eidos-do-v1) + Prim Tool wrapper; merge local overlay.
+# Point the local overlay at the in-bundle chat.db helper.
+# Does not install a loose ~/.local/bin ChatDB binary.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DEST="$HOME/.local/bin"
-EXTRACT_SRC="$HOME/repos-eidos-agi/eidos-do-v1/tools/chatdb-extract.swift"
-WRAP_SRC="$ROOT/tools/imessage-chatdb-receive.swift"
-IDENTITY="Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM)"
+APP="/Applications/Prims Desktop.app"
+HELPER="$APP/Contents/Helpers/imessage-chatdb-receive"
 OVERLAY="$HOME/.prim/registry.local.json"
 
-mkdir -p "$DEST" "$HOME/.prim"
-
-if [[ ! -f "$EXTRACT_SRC" ]]; then
-  echo "FATAL: missing $EXTRACT_SRC — reuse eidos-do-v1, do not rewrite the decoder." >&2
+if [[ ! -x "$HELPER" ]]; then
+  echo "FATAL: in-bundle helper missing at $HELPER" >&2
+  echo "Assemble and sign the app first: ./scripts/build.sh" >&2
   exit 1
 fi
 
-swiftc -O -o "$DEST/chatdb-extract" "$EXTRACT_SRC" -framework AppKit -lsqlite3
-swiftc -O -o "$DEST/imessage-chatdb-receive" "$WRAP_SRC"
+mkdir -p "$HOME/.prim"
 
-security find-certificate -c "$IDENTITY" >/dev/null 2>&1 || {
-  echo "FATAL: $IDENTITY not in keychain." >&2
-  exit 1
-}
-codesign --force --options runtime --timestamp --sign "$IDENTITY" "$DEST/chatdb-extract"
-codesign --force --options runtime --timestamp --sign "$IDENTITY" "$DEST/imessage-chatdb-receive"
-
-python3 - <<'PY'
+python3 - <<PY
 import json
 from pathlib import Path
 path = Path.home() / ".prim" / "registry.local.json"
@@ -49,5 +39,5 @@ path.write_text(json.dumps(doc, indent=2) + "\n")
 print(f"wrote {path} ({len(tools)} tools)")
 PY
 
-echo "installed $DEST/chatdb-extract"
-echo "installed $DEST/imessage-chatdb-receive"
+echo "helper    $HELPER"
+echo "Prims Desktop needs Full Disk Access to read Messages on this Mac."

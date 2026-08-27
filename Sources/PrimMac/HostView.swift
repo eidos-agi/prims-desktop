@@ -50,7 +50,7 @@ struct FDARequestSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Allow access to Messages?")
                 .font(.title2)
-            Text("Prims Desktop needs Full Disk Access to read chat.db. macOS will not show its own prompt. We’ll open Settings so you can turn on Prims Desktop, then quit and reopen this app.")
+            Text(ProductIdentity.fdaNote)
                 .foregroundStyle(.secondary)
             HStack {
                 Button("Not now") { onLater() }
