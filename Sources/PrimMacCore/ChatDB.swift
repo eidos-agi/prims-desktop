@@ -4,16 +4,12 @@ import SQLite3
 
 /// In-process reader for `~/Library/Messages/chat.db`.
 /// Decoder is the eidos-do-v1 `chatdb-extract.swift` attributedBody path
-/// (NSUnarchiver / typedstream). Do not spawn a helper binary.
+/// (NSUnarchiver / typedstream). Runs in the app or an embedded helper
+/// so it inherits Prims Desktop FDA. Do not read chat.db from a loose bin.
 public enum ChatDB {
     public static let path = NSHomeDirectory() + "/Library/Messages/chat.db"
 
-    public static let fdaNote = """
-    Cannot read ~/Library/Messages/chat.db.
-
-    Grant Full Disk Access to Prims Desktop (Prims Desktop):
-    System Settings → Privacy & Security → Full Disk Access → enable Prims Desktop.
-    """
+    public static let fdaNote = ProductIdentity.fdaNote
 
     public struct Message: Sendable, Identifiable {
         public var id: Int64 { rowid }

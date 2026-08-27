@@ -105,6 +105,7 @@ enum ToolLaunch {
     private static func binaryURL(_ tool: PrimTool) -> URL? {
         let names = [tool.bin, tool.name].compactMap { $0 }
         let roots = [
+            ProductIdentity.helpersDirectory(),
             Paths.home().appendingPathComponent("repos-eidos-agi/prim-sim/.build/release"),
             Paths.home().appendingPathComponent("repos-eidos-agi/prim-sim/.build/debug"),
             Paths.home().appendingPathComponent(".local/bin"),

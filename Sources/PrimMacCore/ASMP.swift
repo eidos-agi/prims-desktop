@@ -87,7 +87,7 @@ public enum ASMP {
         infra:
           repo: ~/repos-eidos-agi/prims-desktop
           github: https://github.com/eidos-agi/prims-desktop
-          app: ~/Applications/Prims Desktop.app
+          app: /Applications/Prims Desktop.app
           overlay: ~/.prim/registry.local.json
           health_port: \(port)
           verify:

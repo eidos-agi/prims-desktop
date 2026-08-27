@@ -25,13 +25,7 @@ public enum DesktopCLI {
     ASMP health is http://127.0.0.1:7749/health.
     """
 
-    public static let fdaNote = """
-    Cannot read ~/Library/Messages/chat.db.
-
-    Grant Full Disk Access to prims-desktop (~/.local/bin/prims-desktop):
-    System Settings → Privacy & Security → Full Disk Access.
-    The app CLI is a separate binary from Prims Desktop.app.
-    """
+    public static let fdaNote = ProductIdentity.fdaNote
 
     public static func run(_ args: [String]) -> Int32 {
         let result = invoke(args)
@@ -193,9 +187,14 @@ public enum DesktopCLI {
         let app = appURL()
         let appExists = FileManager.default.fileExists(atPath: app.path)
         let appTeam = appExists ? teamIdentifier(for: app) : nil
-        let cli = cliURL()
-        let cliExists = FileManager.default.isExecutableFile(atPath: cli.path)
-        let cliTeam = cliExists ? teamIdentifier(for: cli) : nil
+        let trampoline = ProductIdentity.trampolineURL()
+        let trampolineExists = FileManager.default.isExecutableFile(atPath: trampoline.path)
+        let trampolineIsScript = trampolineExists && !isMachO(trampoline)
+        let helper = helperURL()
+        let helperExists = FileManager.default.isExecutableFile(atPath: helper.path)
+        let helperTeam = helperExists ? teamIdentifier(for: helper) : nil
+        let chatdbHelper = ProductIdentity.chatdbHelperURL()
+        let chatdbHelperExists = FileManager.default.isExecutableFile(atPath: chatdbHelper.path)
         let readable = ChatDB.health()
         let connectors = (try? HostCatalog.load()).map { HostUI.connectors($0.registry.tools) } ?? []
         let asmp = ASMP.doctor(connectors: connectors)
@@ -205,13 +204,21 @@ public enum DesktopCLI {
             "overlay_tools": overlayTools,
             "app": app.path,
             "app_exists": appExists,
+            "bundle_identifier": ProductIdentity.bundleIdentifier,
             "codesign_team": appTeam ?? "",
-            "cli": cli.path,
-            "cli_exists": cliExists,
-            "cli_team": cliTeam ?? "",
+            "cli": trampoline.path,
+            "cli_exists": trampolineExists,
+            "cli_is_trampoline": trampolineIsScript,
+            "cli_team": "",
+            "helper": helper.path,
+            "helper_exists": helperExists,
+            "helper_team": helperTeam ?? "",
+            "chatdb_helper": chatdbHelper.path,
+            "chatdb_helper_exists": chatdbHelperExists,
             "chat_db": ChatDB.path,
             "chat_db_readable": readable,
             "fda": readable,
+            "fda_note": fdaNote,
             "asmp": ASMP.json(asmp),
         ]
         if json {
@@ -221,9 +228,12 @@ public enum DesktopCLI {
             "overlay     \(overlay.path)\(overlayExists ? "" : "  (missing)")",
             "overlay tools  \(overlayTools.isEmpty ? "(none)" : overlayTools.joined(separator: ", "))",
             "app         \(app.path)\(appExists ? "" : "  (missing)")",
+            "identifier  \(ProductIdentity.bundleIdentifier)",
             "codesign    \(appTeam ?? "(unsigned / unknown)")",
-            "cli         \(cli.path)\(cliExists ? "" : "  (not installed)")",
-            "cli team    \(cliTeam ?? "(unsigned / unknown)")",
+            "trampoline  \(trampoline.path)\(trampolineExists ? (trampolineIsScript ? "  (script)" : "  (NOT a trampoline)") : "  (not installed)")",
+            "helper      \(helper.path)\(helperExists ? "" : "  (missing)")",
+            "helper team \(helperTeam ?? "(unsigned / unknown)")",
+            "chatdb helper  \(chatdbHelper.path)\(chatdbHelperExists ? "" : "  (missing)")",
             "chat.db     \(readable ? "readable" : "locked (FDA)")",
             "asmp        \(asmp.registered ? "registered" : "missing")  health=\(asmp.health ? "ok" : "down")  caps_match=\(asmp.capsMatch ? "yes" : "no")",
             "asmp health \(ASMP.healthURL.absoluteString)",
@@ -390,6 +400,7 @@ public enum DesktopCLI {
     private static func resolveBin(_ tool: PrimTool) -> URL? {
         let names = [tool.bin, tool.name].compactMap { $0 }
         let roots = [
+            ProductIdentity.helpersDirectory(),
             Paths.home().appendingPathComponent(".local/bin"),
         ]
         for root in roots {
@@ -399,7 +410,7 @@ public enum DesktopCLI {
             }
         }
         if let name = names.first {
-            return Paths.home().appendingPathComponent(".local/bin").appendingPathComponent(name)
+            return ProductIdentity.helpersDirectory().appendingPathComponent(name)
         }
         return nil
     }
@@ -483,13 +494,21 @@ public enum DesktopCLI {
     }
 
     public static func appURL() -> URL {
-        Paths.home().appendingPathComponent("Applications/Prims Desktop.app")
+        ProductIdentity.appURL()
+    }
+
+    public static func helperURL() -> URL {
+        ProductIdentity.cliHelperURL()
     }
 
     public static func cliURL() -> URL {
-        let installed = Paths.home().appendingPathComponent(".local/bin/prims-desktop")
-        if FileManager.default.isExecutableFile(atPath: installed.path) {
-            return installed
+        let helper = helperURL()
+        if FileManager.default.isExecutableFile(atPath: helper.path) {
+            return helper
+        }
+        let trampoline = ProductIdentity.trampolineURL()
+        if FileManager.default.isExecutableFile(atPath: trampoline.path) {
+            return trampoline
         }
         let argv0 = CommandLine.arguments[0]
         if argv0.hasPrefix("/") {
@@ -497,6 +516,20 @@ public enum DesktopCLI {
         }
         return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(argv0)
+    }
+
+    public static func isMachO(_ url: URL) -> Bool {
+        guard let fh = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? fh.close() }
+        let magic = fh.readData(ofLength: 4)
+        guard magic.count == 4 else { return false }
+        let word = magic.withUnsafeBytes { $0.load(as: UInt32.self) }
+        switch word {
+        case 0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe, 0xcafebabe, 0xbebafeca:
+            return true
+        default:
+            return false
+        }
     }
 
     public static func teamIdentifier(for url: URL) -> String? {

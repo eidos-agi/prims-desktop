@@ -281,4 +281,88 @@ final class HostTests: XCTestCase {
         let provides = caps?["provides"] as? [String]
         XCTAssertEqual(provides, ["connector.imessage-chatdb-receive"])
     }
+
+    func testProductIdentityIsLocked() {
+        XCTAssertEqual(ProductIdentity.displayName, "Prims Desktop")
+        XCTAssertEqual(ProductIdentity.bundleIdentifier, "sh.prims.desktop")
+        XCTAssertEqual(ProductIdentity.packUTI, "com.eidosagi.prim")
+        XCTAssertEqual(ProductIdentity.appPath, "/Applications/Prims Desktop.app")
+        XCTAssertEqual(ProductIdentity.executableName, "Prim")
+        XCTAssertEqual(
+            ProductIdentity.fdaNote,
+            "Prims Desktop needs Full Disk Access to read Messages on this Mac."
+        )
+        XCTAssertEqual(DesktopCLI.appURL().path, "/Applications/Prims Desktop.app")
+        XCTAssertEqual(
+            DesktopCLI.helperURL().path,
+            "/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"
+        )
+        XCTAssertEqual(DesktopCLI.fdaNote, ProductIdentity.fdaNote)
+        XCTAssertEqual(ChatDB.fdaNote, ProductIdentity.fdaNote)
+        XCTAssertFalse(ProductIdentity.fdaNote.contains("~/.local/bin"))
+        XCTAssertFalse(DesktopCLI.fdaNote.contains("~/.local/bin"))
+        XCTAssertFalse(ChatDB.fdaNote.contains("~/.local/bin"))
+        XCTAssertNotEqual(ProductIdentity.bundleIdentifier, ProductIdentity.packUTI)
+    }
+
+    func testInfoPlistAndPPPCAreBound() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let plist = try String(contentsOf: root.appendingPathComponent("Info.plist"), encoding: .utf8)
+        XCTAssertTrue(plist.contains("<key>CFBundleIdentifier</key>"))
+        XCTAssertTrue(plist.contains("<string>sh.prims.desktop</string>"))
+        XCTAssertTrue(plist.contains("<string>com.eidosagi.prim</string>"))
+        XCTAssertTrue(plist.contains("<string>prim</string>"))
+        XCTAssertTrue(plist.contains("<string>Prims Desktop</string>"))
+        let idSlice = plist.components(separatedBy: "<key>CFBundleIdentifier</key>")[1]
+            .components(separatedBy: "<key>")[0]
+        XCTAssertTrue(idSlice.contains("sh.prims.desktop"))
+        XCTAssertFalse(idSlice.contains("com.eidosagi.prim"))
+
+        let profile = try String(
+            contentsOf: root.appendingPathComponent("deploy/prims-desktop.fulldisk.mobileconfig"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(profile.contains("<key>Identifier</key>"))
+        XCTAssertTrue(profile.contains("<string>sh.prims.desktop</string>"))
+        XCTAssertTrue(profile.contains("<key>IdentifierType</key>"))
+        XCTAssertTrue(profile.contains("<string>bundleID</string>"))
+        XCTAssertTrue(profile.contains("<key>SystemPolicyAllFiles</key>"))
+        XCTAssertTrue(profile.contains("<key>Allowed</key>"))
+        XCTAssertTrue(profile.contains("codesign -dr"))
+        XCTAssertTrue(profile.contains("FILL_FROM_codesign"))
+        XCTAssertFalse(profile.contains("anchor apple generic"))
+
+        let trampoline = try String(
+            contentsOf: root.appendingPathComponent("scripts/prims-desktop-trampoline.sh"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(trampoline.contains("exec "))
+        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"))
+        XCTAssertFalse(trampoline.contains("chat.db"))
+        XCTAssertFalse(trampoline.contains("ChatDB"))
+        XCTAssertFalse(trampoline.contains("sqlite"))
+    }
+
+    func testSourcesDoNotAskFDAForLooseCLI() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let old = "Grant Full Disk Access to prims-desktop (~/.local/bin/prims-desktop)"
+        let files = [
+            "Sources/PrimMacCore/DesktopCLI.swift",
+            "Sources/PrimMacCore/ChatDB.swift",
+            "Sources/PrimMac/HostView.swift",
+            "Sources/PrimMac/UI/StageView.swift",
+            "tools/imessage-chatdb-receive.swift",
+        ]
+        for rel in files {
+            let text = try String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8)
+            XCTAssertFalse(text.contains(old), rel)
+            XCTAssertFalse(text.contains("The app CLI is a separate binary"), rel)
+        }
+    }
 }

@@ -22,9 +22,17 @@ ROOT = Path(__file__).resolve().parents[1]
 HOME = Path.home()
 ASKED_REMOTE = "eidos-agi/prims-desktop"
 ASKED_DIR = "prims-desktop"
-ASKED_APP = HOME / "Applications" / "Prims Desktop.app"
+ASKED_APP = Path("/Applications") / "Prims Desktop.app"
 OLD_APP = HOME / "Applications" / "Prim.app"
+OLD_USER_APP = HOME / "Applications" / "Prims Desktop.app"
+HELPER = ASKED_APP / "Contents" / "Helpers" / "prims-desktop"
+CHATDB_HELPER = ASKED_APP / "Contents" / "Helpers" / "imessage-chatdb-receive"
+TRAMPOLINE = HOME / ".local" / "bin" / "prims-desktop"
 TEAM = "Y6CQ4SWPWM"
+FDA_NOTE = "Prims Desktop needs Full Disk Access to read Messages on this Mac."
+OLD_CLI_FDA = "Grant Full Disk Access to prims-desktop (~/.local/bin/prims-desktop)"
+BUNDLE_ID = "sh.prims.desktop"
+PACK_UTI = "com.eidosagi.prim"
 HEALTH = "http://127.0.0.1:7749/health"
 REGISTRY = "http://127.0.0.1:7700"
 
@@ -87,6 +95,79 @@ def scan_files() -> list[Path]:
     return out
 
 
+def check_source_identity() -> None:
+    plist = (ROOT / "Info.plist").read_text()
+    if f"<string>{BUNDLE_ID}</string>" in plist and "<key>CFBundleIdentifier</key>" in plist:
+        id_block = plist.split("<key>CFBundleIdentifier</key>", 1)[1]
+        if f"<string>{BUNDLE_ID}</string>" in id_block.split("<key>", 1)[0]:
+            ok("info_plist_bundle_id", BUNDLE_ID)
+        else:
+            fail("info_plist_bundle_id", "CFBundleIdentifier is not sh.prims.desktop")
+    else:
+        fail("info_plist_bundle_id", "Info.plist missing sh.prims.desktop")
+    if PACK_UTI in plist and "<string>prim</string>" in plist:
+        ok("exported_uti_prim")
+    else:
+        fail("exported_uti_prim", "Info.plist missing UTI com.eidosagi.prim / .prim")
+    if f"<string>{PACK_UTI}</string>" in plist.split("<key>CFBundleIdentifier</key>", 1)[0]:
+        fail("pack_uti_is_not_bundle_id", "pack UTI used as CFBundleIdentifier")
+    else:
+        ok("pack_uti_is_not_bundle_id")
+
+    profile = ROOT / "deploy" / "prims-desktop.fulldisk.mobileconfig"
+    if not profile.is_file():
+        fail("pppc_mobileconfig", "missing deploy/prims-desktop.fulldisk.mobileconfig")
+    else:
+        text = profile.read_text()
+        need = [
+            "<key>Identifier</key>",
+            f"<string>{BUNDLE_ID}</string>",
+            "<key>IdentifierType</key>",
+            "<string>bundleID</string>",
+            "<key>SystemPolicyAllFiles</key>",
+            "<key>Allowed</key>",
+        ]
+        missing = [n for n in need if n not in text]
+        if missing:
+            fail("pppc_mobileconfig", f"missing {missing}")
+        elif "identifier \"" in text and "anchor apple generic" in text:
+            fail("pppc_mobileconfig", "invented a fake CodeRequirement — leave a fill-from-codesign-dr placeholder")
+        elif "codesign -dr" in text and "FILL_FROM_codesign" in text:
+            ok("pppc_mobileconfig")
+        else:
+            fail("pppc_mobileconfig", "CodeRequirement is not a fill-from-codesign-dr placeholder")
+
+    tramp = (ROOT / "scripts" / "prims-desktop-trampoline.sh").read_text()
+    if "exec " in tramp and str(HELPER) in tramp and "chat.db" not in tramp and "ChatDB" not in tramp and "sqlite" not in tramp:
+        ok("trampoline_source_no_chatdb")
+    else:
+        fail("trampoline_source_no_chatdb", "trampoline must exec the helper and not read chat.db")
+
+    old_hits: list[str] = []
+    exact_ok = False
+    for rel in [
+        "Sources/PrimMacCore/DesktopCLI.swift",
+        "Sources/PrimMacCore/ChatDB.swift",
+        "Sources/PrimMacCore/ProductIdentity.swift",
+        "Sources/PrimMac/HostView.swift",
+        "Sources/PrimMac/UI/StageView.swift",
+        "tools/imessage-chatdb-receive.swift",
+    ]:
+        text = (ROOT / rel).read_text()
+        if OLD_CLI_FDA in text or "~/.local/bin/prims-desktop)" in text:
+            old_hits.append(rel)
+        if FDA_NOTE in text:
+            exact_ok = True
+    if old_hits:
+        fail("fda_note_not_cli_tcc", ", ".join(old_hits))
+    else:
+        ok("fda_note_not_cli_tcc")
+    if exact_ok:
+        ok("fda_note_exact")
+    else:
+        fail("fda_note_exact", "locked FDA sentence missing")
+
+
 def check_identity() -> None:
     if ROOT.name == ASKED_DIR:
         ok("local_tree_name", str(ROOT))
@@ -114,6 +195,12 @@ def check_identity() -> None:
         fail("app_bundle", f"live {ASKED_APP} but leftover {OLD_APP} still exists")
     else:
         fail("app_bundle", f"missing {ASKED_APP}")
+    if OLD_USER_APP.exists() and OLD_USER_APP.resolve() != ASKED_APP.resolve():
+        fail("app_not_in_user_applications", f"leftover {OLD_USER_APP}; install is {ASKED_APP}")
+    elif ASKED_APP.is_dir():
+        ok("app_not_in_user_applications")
+
+    check_source_identity()
 
     which = run(["which", "prims-desktop"])
     path = which.stdout.strip()
@@ -275,7 +362,7 @@ def check_naming() -> None:
     else:
         fail("package_name", f'Package.swift package name is {pkg_name!r}, want "prims-desktop"')
 
-    # Bundle display name is the product; executable "Prim" is leftover.
+    # Display / Dock / About is Prims Desktop. Internal Mach-O may stay Prim.
     plist = ASKED_APP / "Contents" / "Info.plist"
     if plist.is_file():
         dumped = run(["plutil", "-p", str(plist)]).stdout
@@ -283,12 +370,17 @@ def check_naming() -> None:
             ok("bundle_display_name")
         else:
             fail("bundle_display_name", dumped)
-        if '"CFBundleExecutable" => "Prims Desktop"' in dumped or '"CFBundleExecutable" => "prims-desktop"' in dumped:
+        if '"CFBundleIdentifier" => "sh.prims.desktop"' in dumped:
+            ok("bundle_identifier", BUNDLE_ID)
+        else:
+            fail("bundle_identifier", dumped)
+        if '"CFBundleExecutable" => "Prim"' in dumped or '"CFBundleExecutable" => "Prims Desktop"' in dumped:
             ok("bundle_executable_name")
         else:
-            fail("bundle_executable_name", "CFBundleExecutable is still Prim")
+            fail("bundle_executable_name", dumped)
     else:
         skip("bundle_display_name", "app not installed")
+        skip("bundle_identifier", "app not installed")
         skip("bundle_executable_name", "app not installed")
 
     # Operational leftovers — not charter history, the live how-to.
@@ -302,9 +394,11 @@ def check_naming() -> None:
     leftover_hits: list[str] = []
     pats = [
         (re.compile(r"~/Applications/Prim\.app"), "old app path"),
+        (re.compile(r"~/Applications/Prims Desktop\.app"), "user Applications leftover"),
         (re.compile(r'open -a Prim([^\s"]|$)'), "old open -a Prim"),
         (re.compile(r"~/repos-eidos-agi/prim-mac-v1"), "old tree as a path"),
         (re.compile(r"https?://desktop\.prims\.sh"), "wrong live face"),
+        (re.compile(re.escape(OLD_CLI_FDA)), "CLI as TCC client"),
     ]
     for path in operational:
         if not path.is_file():
@@ -347,14 +441,24 @@ def check_pro() -> None:
     else:
         fail("signed_team_id", blob.replace("\n", " ")[:200])
 
-    cli = run(["which", "prims-desktop"]).stdout.strip()
-    if cli:
-        c2 = run(["codesign", "-dv", cli], timeout=20)
+    if HELPER.is_file():
+        c2 = run(["codesign", "-dv", str(HELPER)], timeout=20)
         blob = c2.stdout + c2.stderr
         if TEAM in blob:
-            ok("cli_signed_team_id", TEAM)
+            ok("helper_signed_team_id", TEAM)
         else:
-            fail("cli_signed_team_id", blob.replace("\n", " ")[:200])
+            fail("helper_signed_team_id", blob.replace("\n", " ")[:200])
+    else:
+        skip("helper_signed_team_id", "bundle helper not installed")
+    tramp = run(["which", "prims-desktop"]).stdout.strip()
+    if tramp:
+        kind = run(["file", tramp]).stdout
+        if "Mach-O" in kind:
+            fail("path_cli_is_trampoline", f"{tramp} is a Mach-O TCC principal; want a trampoline script")
+        elif "exec " in Path(tramp).read_text(errors="replace") and "Helpers/prims-desktop" in Path(tramp).read_text(errors="replace"):
+            ok("path_cli_is_trampoline", tramp)
+        else:
+            fail("path_cli_is_trampoline", f"{tramp} does not exec the in-bundle helper")
 
     readme = (ROOT / "README.md").read_text()
     if "github.com/eidos-agi/prims-desktop" in readme and "~/repos-eidos-agi/prims-desktop" in readme:
@@ -610,10 +714,12 @@ def check_deep() -> None:
 
     im = status_by.get("imessage-chatdb-receive") or {}
     note = im.get("note") or ""
-    if "separate" in note.lower() and "prims-desktop" in note and "Prims Desktop.app" in note:
-        ok("tcc_split_documented")
+    if OLD_CLI_FDA in note or "~/.local/bin" in note:
+        fail("fda_copy_not_cli_path", "status still names a loose-bin TCC client")
+    elif im and (note == FDA_NOTE or "chat.db readable" in note or "chat.db locked" in note):
+        ok("fda_copy_not_cli_path")
     elif im:
-        fail("tcc_split_documented", "iMessage status note does not name both TCC principals")
+        fail("fda_copy_not_cli_path", note[:160])
     chat = im.get("chat_db") or ""
     if chat.endswith("Library/Messages/chat.db"):
         ok("chat_db_path")
@@ -622,24 +728,33 @@ def check_deep() -> None:
 
     try:
         doctor = cli_json(["doctor"])
-        need_d = {"overlay", "app", "cli", "asmp", "chat_db", "fda"}
+        need_d = {"overlay", "app", "cli", "asmp", "chat_db", "fda", "helper", "cli_is_trampoline"}
         if need_d <= set(doctor):
             ok("doctor_json_schema")
         else:
             fail("doctor_json_schema", f"missing {sorted(need_d - set(doctor))}")
-        if doctor.get("cli") != doctor.get("app") and doctor.get("cli_exists") and doctor.get("app_exists"):
-            ok("two_tcc_principals", "app and CLI are different binaries")
+        if doctor.get("bundle_identifier") == BUNDLE_ID and str(doctor.get("app", "")).startswith("/Applications/"):
+            ok("doctor_app_identity")
         else:
-            fail("two_tcc_principals", "app/cli collapsed or missing")
+            fail("doctor_app_identity", f"app={doctor.get('app')} id={doctor.get('bundle_identifier')}")
+        if doctor.get("cli_is_trampoline") and doctor.get("helper_exists") and "Contents/Helpers/prims-desktop" in str(doctor.get("helper", "")):
+            ok("trampoline_and_bundle_helper")
+        else:
+            fail(
+                "trampoline_and_bundle_helper",
+                "doctor must report PATH trampoline + in-bundle helper, not two TCC principals",
+            )
     except Exception as e:
         fail("doctor_json_schema", str(e))
 
     app_blob = codesign_blob(ASKED_APP)
-    cli_blob = codesign_blob(HOME / ".local/bin/prims-desktop")
-    if "flags=0x10000(runtime)" in app_blob and "flags=0x10000(runtime)" in cli_blob:
+    helper_blob = codesign_blob(HELPER) if HELPER.is_file() else ""
+    if "flags=0x10000(runtime)" in app_blob and "flags=0x10000(runtime)" in helper_blob:
         ok("hardened_runtime")
+    elif ASKED_APP.is_dir():
+        fail("hardened_runtime", "app or in-bundle helper missing runtime harden")
     else:
-        fail("hardened_runtime", "app or CLI missing runtime harden")
+        skip("hardened_runtime", "app not installed")
     if "Developer ID Application: Eidos AGI LLC" in app_blob and "Adhoc" not in app_blob:
         ok("developer_id_not_adhoc")
     else:
@@ -653,20 +768,28 @@ def check_deep() -> None:
         fail("notarized", sp_txt.replace("\n", " ") + " — shipr blocks; notarize before a binary leaves this Mac")
 
     plist = (ROOT / "Info.plist").read_text()
-    if "com.eidosagi.prim" in plist and "<string>prim</string>" in plist:
+    if PACK_UTI in plist and "<string>prim</string>" in plist:
         ok("exported_uti_prim")
     else:
         fail("exported_uti_prim", "Info.plist missing UTI com.eidosagi.prim / .prim")
+    if "<string>sh.prims.desktop</string>" in plist:
+        ok("info_plist_bundle_id_deep", BUNDLE_ID)
+    else:
+        fail("info_plist_bundle_id_deep", "Info.plist CFBundleIdentifier is not sh.prims.desktop")
 
     build = (ROOT / "scripts" / "build.sh").read_text()
-    if 'APP="$HOME/Applications/Prims Desktop.app"' in build and TEAM in build:
+    if 'APP="/Applications/Prims Desktop.app"' in build and TEAM in build:
         ok("build_sh_target_app")
     else:
-        fail("build_sh_target_app", "build.sh does not assemble Prims Desktop.app with Y6CQ4SWPWM")
-    if "--product prims-desktop" in build or "--product PrimsDesktop" in build:
-        ok("build_sh_product_name")
+        fail("build_sh_target_app", "build.sh does not assemble /Applications/Prims Desktop.app with Y6CQ4SWPWM")
+    if 'Contents/Helpers/prims-desktop' in build and "--product prims-desktop" in build:
+        ok("build_sh_embeds_cli_helper")
     else:
-        fail("build_sh_product_name", "build.sh still `swift build --product PrimMac` and copies to MacOS/Prim")
+        fail("build_sh_embeds_cli_helper", "build.sh must copy prims-desktop into Contents/Helpers")
+    if 'Contents/MacOS/Prim' in build and "--product PrimMac" in build:
+        ok("build_sh_internal_prim")
+    else:
+        fail("build_sh_internal_prim", "internal binary may stay Prim; copy PrimMac → MacOS/Prim")
 
     if (ROOT / "Prim.entitlements").is_file() or (ROOT / "PrimsDesktop.entitlements").is_file():
         ok("entitlements_file")
@@ -700,10 +823,18 @@ def check_deep() -> None:
         ok("package_has_cli_product")
     else:
         fail("package_has_cli_product", "Package.swift missing prims-desktop executable product")
-    if '.executable(name: "PrimMac"' in pkg:
-        fail("package_still_ships_primmac_product", "Package.swift still products PrimMac as the app executable name")
+    if '.executable(name: "imessage-chatdb-receive"' in pkg:
+        ok("package_has_chatdb_helper")
     else:
-        ok("package_still_ships_primmac_product")
+        fail("package_has_chatdb_helper", "Package.swift missing imessage-chatdb-receive helper product")
+
+    install = (ROOT / "scripts" / "install-cli.sh").read_text()
+    if re.search(r"^\s*codesign\b", install, re.M):
+        fail("install_cli_does_not_sign_trampoline", "install-cli.sh must not codesign the PATH trampoline as a TCC client")
+    elif "prims-desktop-trampoline.sh" in install and "Mach-O" in install:
+        ok("install_cli_does_not_sign_trampoline")
+    else:
+        fail("install_cli_does_not_sign_trampoline", "install-cli.sh must install the trampoline script")
 
     leftovers = []
     for rel in ["Sources/PrimMac/RegistrySidebar.swift", "Sources/PrimMac/ToolWebView.swift"]:

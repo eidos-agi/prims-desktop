@@ -28,7 +28,7 @@ North star id lives in `.learn/north-star.json`. Charter metric is
 3. Prove it: HostTests when code changed; **Prim.app window** via
    `scripts/capture-window` (or `screencapture -l <windowid>`) when UI
    changed. Read the PNG. Do not score Paseo HTML as the app.
-4. Backup `~/Applications/Prims Desktop.app` with a timestamp before overwrite;
+4. Backup `/Applications/Prims Desktop.app` with a timestamp before overwrite;
    `scripts/build.sh` is the ship identity.
 5. `secondlook-md look --topic "<the gap>"` after a non-trivial change.
 6. Update `ACCEPTANCE.md` — never batch-✅.
