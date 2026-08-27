@@ -91,11 +91,14 @@ struct DebugLogView: View {
                 .onChange(of: tail.text) { _ in
                     proxy.scrollTo("end", anchor: .bottom)
                 }
+                .onAppear {
+                    tail.start()
+                    proxy.scrollTo("end", anchor: .bottom)
+                }
             }
         }
         .background(Ink.paper)
         .preferredColorScheme(.light)
-        .onAppear { tail.start() }
         .onDisappear { tail.stop() }
     }
 
@@ -132,6 +135,7 @@ final class DebugTail: ObservableObject {
     private var offset: UInt64 = 0
 
     func start() {
+        stop()
         poll(reset: true)
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             self?.poll(reset: false)

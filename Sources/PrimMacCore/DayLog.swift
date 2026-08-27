@@ -62,6 +62,7 @@ public enum DayLog {
                 defer { try? handle.close() }
                 _ = try handle.seekToEnd()
                 try handle.write(contentsOf: data)
+                try handle.synchronize()
             } else {
                 try data.write(to: dest, options: .withoutOverwriting)
             }
