@@ -2,7 +2,7 @@
 """Adversarial prove for Prims Desktop.
 
 Rerun: ./scripts/litmus.py
-Also:  ./scripts/litmus.py --asked | --naming | --pro
+Also:  ./scripts/litmus.py --asked | --naming | --pro | --deep
 
 Fails when what Daniel asked for does not work, names are leftover/illogical,
 or the ship does not look like a professional Mac + ASMP product.
@@ -390,24 +390,366 @@ def check_pro() -> None:
         ok("live_face_is_prims_sh_desktop")
 
 
+def asmp_json_get(name: str) -> dict:
+    p = run(["asmp", "--json", "get", name])
+    if p.returncode != 0:
+        raise RuntimeError(p.stderr.strip() or p.stdout.strip() or f"asmp get {name}")
+    return json.loads(p.stdout)
+
+
+def codesign_blob(path: Path) -> str:
+    return run(["codesign", "-dv", "--verbose=4", str(path)], timeout=20).stderr + run(
+        ["codesign", "-dv", "--verbose=4", str(path)], timeout=20
+    ).stdout
+
+
+def check_deep() -> None:
+    """Honesty, drift, TCC, schema, sign. The checks that catch a pretty lie."""
+    try:
+        connectors = cli_json(["connectors"]).get("connectors") or []
+        names = [r["name"] for r in connectors]
+        by_name = {r["name"]: r for r in connectors}
+    except Exception as e:
+        fail("connector_json_schema", str(e))
+        connectors, names, by_name = [], [], {}
+
+    required = {"name", "kind", "direction", "cites", "as", "in_host", "bin"}
+    schema_bad = []
+    minted = []
+    for r in connectors:
+        missing = required - set(r)
+        if missing:
+            schema_bad.append(f"{r.get('name','?')} missing {sorted(missing)}")
+        if r.get("kind") not in {"connector"}:
+            schema_bad.append(f"{r.get('name')} kind={r.get('kind')}")
+        if str(r.get("kind", "")).startswith("prim."):
+            minted.append(r.get("name"))
+        if r.get("name") in {"prim.connector", "prim.surface"}:
+            minted.append(r.get("name"))
+    if connectors and not schema_bad:
+        ok("connector_json_schema", f"{len(connectors)} rows")
+    elif connectors:
+        fail("connector_json_schema", "; ".join(schema_bad[:6]))
+    if minted:
+        fail("catalog_no_minted_pack_types", str(minted))
+    elif connectors:
+        ok("catalog_no_minted_pack_types")
+
+    try:
+        status_doc = cli_json(["status"])
+        statuses = status_doc.get("status") or []
+        status_by = {s["name"]: s for s in statuses}
+    except Exception as e:
+        fail("status_json_schema", str(e))
+        statuses, status_by = [], {}
+
+    if statuses:
+        s_bad = [s.get("name") for s in statuses if "ok" not in s or "name" not in s]
+        if s_bad:
+            fail("status_json_schema", f"rows missing ok/name: {s_bad}")
+        else:
+            ok("status_json_schema", f"{len(statuses)} rows")
+
+    # A connector is not operable just because ASMP pinged the host health port.
+    liars = []
+    for s in statuses:
+        operable = bool(s.get("in_host")) or bool(s.get("bin_exists")) or bool(s.get("chat_db_readable"))
+        if s.get("ok") and not operable:
+            liars.append(s.get("name"))
+    if liars:
+        fail(
+            "status_ok_implies_operable",
+            f"{liars} report ok=true with no in-host, no bin, no chat.db — status is a costume",
+        )
+    elif statuses:
+        ok("status_ok_implies_operable")
+
+    # Airport map must not call a down connector healthy.
+    eamd = run(["eamd", "asmp"])
+    laundered = []
+    if eamd.returncode == 0:
+        for n in names:
+            line = next((ln for ln in eamd.stdout.splitlines() if re.search(rf"\b{re.escape(n)}\b", ln)), "")
+            st = status_by.get(n) or {}
+            if "health healthy" in line and st.get("ok") is False:
+                laundered.append(n)
+        if laundered:
+            fail(
+                "asmp_does_not_launder_down_connectors",
+                f"eamd says healthy, status.ok=false: {laundered}",
+            )
+        elif names:
+            ok("asmp_does_not_launder_down_connectors")
+    else:
+        skip("asmp_does_not_launder_down_connectors", "eamd asmp failed")
+
+    overlay_path = HOME / ".prim" / "registry.local.json"
+    if overlay_path.is_file():
+        overlay = json.loads(overlay_path.read_text())
+        tools = overlay.get("tools") or []
+        ot = [t.get("name") for t in tools]
+        missing = [n for n in ot if n not in names]
+        if missing:
+            fail("overlay_tools_in_catalog", f"overlay not in connectors: {missing}")
+        else:
+            ok("overlay_tools_in_catalog", ", ".join(ot))
+        need = {"imessage-chatdb-receive", "opff-dally-receive"}
+        if need <= set(ot):
+            ok("overlay_keeps_imessage_and_opff")
+        else:
+            fail("overlay_keeps_imessage_and_opff", f"overlay={ot}")
+        kind_bad = [t.get("name") for t in tools if t.get("kind") not in {"connector"}]
+        type_mint = [t.get("name") for t in tools if str(t.get("kind", "")).startswith("prim.")]
+        if kind_bad or type_mint:
+            fail("overlay_kinds_are_connector", f"{kind_bad or type_mint}")
+        else:
+            ok("overlay_kinds_are_connector")
+    else:
+        fail("overlay_tools_in_catalog", f"missing {overlay_path}")
+
+    yaml = ROOT / "asmp.yaml"
+    if yaml.is_file() and names:
+        text = yaml.read_text()
+        missing_y = [n for n in names if f"connector.{n}" not in text]
+        extras = re.findall(r"connector\.([A-Za-z0-9._-]+)", text)
+        extra_y = [e for e in extras if e not in names]
+        if missing_y or extra_y:
+            fail("yaml_caps_match_live_connectors", f"missing={missing_y} extra={extra_y}")
+        else:
+            ok("yaml_caps_match_live_connectors")
+    elif names:
+        fail("yaml_caps_match_live_connectors", "asmp.yaml missing")
+
+    try:
+        host = asmp_json_get("prims-desktop")
+        provides = (host.get("capabilities") or {}).get("provides") or []
+        live_caps = {f"connector.{n}" for n in names}
+        got_caps = {c for c in provides if str(c).startswith("connector.")}
+        if live_caps == got_caps:
+            ok("asmp_registry_caps_match_live")
+        else:
+            fail(
+                "asmp_registry_caps_match_live",
+                f"registry={sorted(got_caps)} live={sorted(live_caps)}",
+            )
+        infra = host.get("infra") or {}
+        if str(infra.get("repo", "")).endswith("/prims-desktop"):
+            ok("asmp_infra_repo")
+        else:
+            fail("asmp_infra_repo", str(infra.get("repo")))
+    except Exception as e:
+        fail("asmp_registry_caps_match_live", str(e))
+
+    fake_http = []
+    parent_bad = []
+    for n in names:
+        try:
+            m = asmp_json_get(n)
+        except Exception:
+            continue
+        if m.get("parent") != "prims-desktop":
+            parent_bad.append(n)
+        eps = m.get("endpoints") or []
+        if any(e.get("protocol") == "http" and e.get("port") == 7749 for e in eps):
+            row = by_name.get(n) or {}
+            if row.get("as") != "http":
+                fake_http.append(n)
+    if names and not parent_bad:
+        ok("connector_asmp_parent")
+    elif names:
+        fail("connector_asmp_parent", f"parent != prims-desktop: {parent_bad}")
+    if fake_http:
+        fail(
+            "connector_asmp_not_fake_http",
+            f"{fake_http} advertise protocol=http :7749 but they are not HTTP services",
+        )
+    elif names:
+        ok("connector_asmp_not_fake_http")
+
+    rec = run(["prims-desktop", "--json", "receive", "no-such-connector"])
+    try:
+        body = json.loads(rec.stdout or "{}")
+    except json.JSONDecodeError:
+        body = {}
+    if rec.returncode != 0 and body.get("ok") is False:
+        ok("receive_unknown_fails")
+    else:
+        fail("receive_unknown_fails", f"exit={rec.returncode} {rec.stdout[:160]}")
+
+    rec2 = run(["prims-desktop", "--json", "receive", "opff-dally-receive"])
+    try:
+        body2 = json.loads(rec2.stdout or "{}")
+    except json.JSONDecodeError:
+        body2 = {}
+    if rec2.returncode != 0 and body2.get("ok") is False:
+        ok("receive_non_imessage_fails")
+    else:
+        fail("receive_non_imessage_fails", f"exit={rec2.returncode} {rec2.stdout[:160]}")
+
+    link = HOME / ".local/bin/prim-desktop"
+    target = HOME / ".local/bin/prims-desktop"
+    if link.is_symlink() and link.resolve() == target.resolve():
+        ok("cli_compat_symlink")
+    else:
+        fail("cli_compat_symlink", f"{link} -> {link.resolve() if link.exists() else 'missing'}")
+
+    serve = run(["pgrep", "-f", "prims-desktop asmp serve"])
+    if serve.returncode == 0 and serve.stdout.strip():
+        ok("health_serve_process_alive", serve.stdout.splitlines()[0])
+    else:
+        fail("health_serve_process_alive", "no prims-desktop asmp serve; health will go stale")
+
+    try:
+        hj = http_json(HEALTH)
+        if hj.get("service") == "prims-desktop":
+            ok("health_json_is_host")
+        else:
+            fail("health_json_is_host", str(hj))
+    except Exception as e:
+        fail("health_json_is_host", str(e))
+
+    im = status_by.get("imessage-chatdb-receive") or {}
+    note = im.get("note") or ""
+    if "separate" in note.lower() and "prims-desktop" in note and "Prims Desktop.app" in note:
+        ok("tcc_split_documented")
+    elif im:
+        fail("tcc_split_documented", "iMessage status note does not name both TCC principals")
+    chat = im.get("chat_db") or ""
+    if chat.endswith("Library/Messages/chat.db"):
+        ok("chat_db_path")
+    elif im:
+        fail("chat_db_path", chat or "missing")
+
+    try:
+        doctor = cli_json(["doctor"])
+        need_d = {"overlay", "app", "cli", "asmp", "chat_db", "fda"}
+        if need_d <= set(doctor):
+            ok("doctor_json_schema")
+        else:
+            fail("doctor_json_schema", f"missing {sorted(need_d - set(doctor))}")
+        if doctor.get("cli") != doctor.get("app") and doctor.get("cli_exists") and doctor.get("app_exists"):
+            ok("two_tcc_principals", "app and CLI are different binaries")
+        else:
+            fail("two_tcc_principals", "app/cli collapsed or missing")
+    except Exception as e:
+        fail("doctor_json_schema", str(e))
+
+    app_blob = codesign_blob(ASKED_APP)
+    cli_blob = codesign_blob(HOME / ".local/bin/prims-desktop")
+    if "flags=0x10000(runtime)" in app_blob and "flags=0x10000(runtime)" in cli_blob:
+        ok("hardened_runtime")
+    else:
+        fail("hardened_runtime", "app or CLI missing runtime harden")
+    if "Developer ID Application: Eidos AGI LLC" in app_blob and "Adhoc" not in app_blob:
+        ok("developer_id_not_adhoc")
+    else:
+        fail("developer_id_not_adhoc", app_blob.replace("\n", " ")[:180])
+
+    sp_app = run(["spctl", "-a", "-v", str(ASKED_APP)])
+    sp_txt = (sp_app.stdout + sp_app.stderr).strip()
+    if "accepted" in sp_txt.lower() and "unnotarized" not in sp_txt.lower():
+        ok("notarized")
+    else:
+        fail("notarized", sp_txt.replace("\n", " ") + " — shipr blocks; notarize before a binary leaves this Mac")
+
+    plist = (ROOT / "Info.plist").read_text()
+    if "com.eidosagi.prim" in plist and "<string>prim</string>" in plist:
+        ok("exported_uti_prim")
+    else:
+        fail("exported_uti_prim", "Info.plist missing UTI com.eidosagi.prim / .prim")
+
+    build = (ROOT / "scripts" / "build.sh").read_text()
+    if 'APP="$HOME/Applications/Prims Desktop.app"' in build and TEAM in build:
+        ok("build_sh_target_app")
+    else:
+        fail("build_sh_target_app", "build.sh does not assemble Prims Desktop.app with Y6CQ4SWPWM")
+    if "--product prims-desktop" in build or "--product PrimsDesktop" in build:
+        ok("build_sh_product_name")
+    else:
+        fail("build_sh_product_name", "build.sh still `swift build --product PrimMac` and copies to MacOS/Prim")
+
+    if (ROOT / "Prim.entitlements").is_file() or (ROOT / "PrimsDesktop.entitlements").is_file():
+        ok("entitlements_file")
+    else:
+        fail("entitlements_file", "no entitlements file next to build.sh")
+
+    prove = (ROOT / "scripts" / "prove.sh").read_text()
+    if "status imessage-chatdb-receive || true" in prove:
+        fail("prove_does_not_swallow_status", "prove.sh uses || true on iMessage status")
+    else:
+        ok("prove_does_not_swallow_status")
+
+    tests = (ROOT / "Tests" / "PrimMacTests" / "HostTests.swift").read_text() if (ROOT / "Tests" / "PrimMacTests" / "HostTests.swift").is_file() else ""
+    filters = re.findall(r"HostTests\.(test[A-Za-z0-9]+)", prove)
+    missing_t = [f for f in filters if f"func {f}(" not in tests]
+    if filters and not missing_t:
+        ok("prove_filters_exist_as_tests", f"{len(filters)} filters")
+    elif filters:
+        fail("prove_filters_exist_as_tests", f"prove filters with no test: {missing_t}")
+    else:
+        fail("prove_filters_exist_as_tests", "prove.sh has no HostTests filters")
+
+    remotes = git("remote")
+    if remotes.split() == ["origin"]:
+        ok("single_origin_remote")
+    else:
+        fail("single_origin_remote", remotes.replace("\n", " "))
+
+    pkg = (ROOT / "Package.swift").read_text()
+    if '.executable(name: "prims-desktop"' in pkg:
+        ok("package_has_cli_product")
+    else:
+        fail("package_has_cli_product", "Package.swift missing prims-desktop executable product")
+    if '.executable(name: "PrimMac"' in pkg:
+        fail("package_still_ships_primmac_product", "Package.swift still products PrimMac as the app executable name")
+    else:
+        ok("package_still_ships_primmac_product")
+
+    leftovers = []
+    for rel in ["Sources/PrimMac/RegistrySidebar.swift", "Sources/PrimMac/ToolWebView.swift"]:
+        if (ROOT / rel).is_file() and "RegistrySidebar" in rel:
+            leftovers.append(rel)
+    # ChatGPT-costume chrome still sitting in the app target.
+    chrome = []
+    for rel in ["Sources/PrimMac/DeskModel.swift", "Sources/PrimMac/HostView.swift"]:
+        fp = ROOT / rel
+        if not fp.is_file():
+            continue
+        txt = fp.read_text(errors="replace")
+        if re.search(r"composer|Hide Sidebar|Them\b|Accounts rail", txt):
+            chrome.append(rel)
+    if leftovers:
+        fail("no_leftover_lab_sidebar", ", ".join(leftovers))
+    else:
+        ok("no_leftover_lab_sidebar")
+    if chrome:
+        fail("no_chatgpt_costume_chrome", ", ".join(chrome))
+    else:
+        ok("no_chatgpt_costume_chrome")
+
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Adversarial Prims Desktop litmus")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--asked", action="store_true", help="only 'does what was asked work'")
     g.add_argument("--naming", action="store_true", help="only naming / leftover identity")
     g.add_argument("--pro", action="store_true", help="only professional-ship checks")
+    g.add_argument("--deep", action="store_true", help="only honesty / drift / TCC / sign")
     args = ap.parse_args()
 
     print(f"litmus  {ROOT}")
-    if not args.naming and not args.pro:
+    if not args.naming and not args.pro and not args.deep:
         check_identity()
         check_asked()
-    if not args.asked and not args.pro:
+    if not args.asked and not args.pro and not args.deep:
         if args.naming:
             check_identity()
         check_naming()
-    if not args.asked and not args.naming:
+    if not args.asked and not args.naming and not args.deep:
         check_pro()
+    if args.deep or (not args.asked and not args.naming and not args.pro):
+        check_deep()
 
     print()
     print(f"{len(PASSED)} passed, {len(FAILED)} failed, {len(SKIPPED)} skipped")
