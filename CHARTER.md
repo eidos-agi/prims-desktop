@@ -80,7 +80,7 @@ writes the pack, not a sidecar. A person can work the same file they attached.
 An agent can point at a path and mean the document, not a tab.
 
 World-class is Preview for `.prim`. Double-click, Mail, Messages, and
-`open -a Prim` all land on the citing tool — not a zip preview, not a browser
+`open -a "Prims Desktop"` all land on the citing tool — not a zip preview, not a browser
 tab, not the fallback line “This tool runs locally.” Every registered type
 hosts. Every citing surface and connector is choosable; process tools stay
 local. File → Save writes the zip and Detect still returns the same kind.
@@ -236,7 +236,7 @@ irreversible: true
 
 ### open_any_prim
 must: File → Open and double-click open a `.prim` in Prim.app.
-case: open -a Prim a sample pack; window shows the citing tool
+case: open -a "Prims Desktop" a sample pack; window shows the citing tool
 
 ### view_edit_save
 must: The citing surface tool is on screen. File → Save writes the pack.

@@ -12,7 +12,7 @@ if [[ "${chapter}" == "next" ]]; then
 on run argv
   set packName to item 1 of argv
   tell application "System Events"
-    if not (exists process "Prim") then error "Prim.app is not running"
+    if not (exists process "Prims Desktop") then error "Prims Desktop is not running"
     tell process "Prim"
       set frontmost to true
       set picked to false
@@ -38,6 +38,6 @@ fi
 defaults write com.eidosagi.prim gotoChapter "$chapter"
 osascript -e 'tell application "Prim" to quit' >/dev/null 2>&1 || true
 sleep 0.5
-open -a Prim "$PACK"
+open -a "Prims Desktop" "$PACK"
 echo "opened $PACK chapter=$chapter"
 echo "Wait for the folio, then scripts/capture-window. Clear with: defaults delete com.eidosagi.prim gotoChapter"

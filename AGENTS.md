@@ -1,6 +1,6 @@
-# Prim.app — agent rules
+# Prims Desktop — agent rules
 
-Prim.app is an Eidos **macOS desktop** product. Shipping practice lives in
+**Prims Desktop** is an Eidos macOS desktop product. Shipping practice lives in
 `eidos-desktop-app-builder`. Product code stays here.
 
 Keyword **testr** / **shipr**: load the committed models in `.testr/` and
@@ -14,7 +14,7 @@ Keyword **testr** / **shipr**: load the committed models in `.testr/` and
 | Company ship (default build) | `Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM)` + notary |
 | Forbidden | ad-hoc, Local Dev as ship, personal `LJWV44N8BF` |
 
-Team ID **Y6CQ4SWPWM**. Backup `~/Applications/Prim.app` before replace.
+Team ID **Y6CQ4SWPWM**. Backup `~/Applications/Prims Desktop.app` before replace.
 
 ## Proof then ship
 

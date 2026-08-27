@@ -14,7 +14,7 @@ import Foundation
 let FDA_NOTE = """
 Cannot open chat.db. Grant Full Disk Access to chatdb-extract \
 (System Settings → Privacy & Security → Full Disk Access), then re-run. \
-Do not grant it to Prim.app unless you in-process the read.
+Do not grant it to a helper. Grant Full Disk Access to Prims Desktop and/or prims-desktop.
 """
 
 var healthOnly = false

@@ -1,6 +1,6 @@
 #!/bin/zsh
 set -euo pipefail
-# Capture a Prim.app document window. Proof that counts for GREAT land/place.
+# Capture a Prims Desktop document window. Proof that counts for GREAT land/place.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/.learn/proofs"
 mkdir -p "$OUT"
@@ -31,7 +31,7 @@ for w in wins:
     layer = w.get("kCGWindowLayer") or 0
     cands.append((layer, name, int(w["kCGWindowNumber"]), bounds))
 if not cands:
-    sys.exit("no on-screen Prim.app windows")
+    sys.exit("no on-screen Prims Desktop windows")
 # Prefer a .prim document; optional label substring; typical 900×592
 # document over a leftover restored window; tiny newest-id tiebreak.
 def score(item):

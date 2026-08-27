@@ -1,13 +1,13 @@
-# Prim.app acceptance
+# Prims Desktop acceptance
 
-Status: 🔧 M1 host proven in tests + signed app · ⬜ edit-export of in-memory mutations · 🔧 OBIF cover + later plates seen in Prim.app (jump, not Page Down) · ⬜ mutation Save / Mail
+Status: 🔧 M1 host proven in tests + signed app · ⬜ edit-export of in-memory mutations · 🔧 OBIF cover + later plates seen in Prims Desktop (jump, not Page Down) · ⬜ mutation Save / Mail
 
 Loop: `LEARN.md`. Score: `scripts/learn` → `.learn/LATEST.md`. Target: 90 on `GREAT.md`.
 
-- ✅ **AC-1 Document host.** Prim.app is a macOS document app for `.prim` (UTI `com.eidosagi.prim`). Verify: `Info.plist` + `~/Applications/Prim.app` signed `Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM)`.
+- ✅ **AC-1 Document host.** Prim.app is a macOS document app for `.prim` (UTI `com.eidosagi.prim`). Verify: `Info.plist` + `~/Applications/Prims Desktop.app` signed `Developer ID Application: Eidos AGI LLC (Y6CQ4SWPWM)`.
 - ✅ **AC-2 All types.** Every sample pack detects a kind and has ≥1 citing surface tool. Verify: `swift test` `testEverySampleHasACitingSurface` (16 packs, 16 types).
 - ✅ **AC-3 All tools.** Surfaces that cite the kind are listed. Verify: `HostCatalog.surfaces` in the same test (log → `log-editor`).
-- 🔧 **AC-4 Open / view.** Opening a sample hosts the citing editor. Verify: `open -a Prim` a sample; `screencapture -l` of that window — not Paseo HTML. Partial: `prim.obif.prim` cover (lockup + “Send me the prim”) on 2026-08-20 window 46990. Still due: emf and the other kinds.
+- 🔧 **AC-4 Open / view.** Opening a sample hosts the citing editor. Verify: `open -a "Prims Desktop"` a sample; `screencapture -l` of that window — not Paseo HTML. Partial: `prim.obif.prim` cover (lockup + “Send me the prim”) on 2026-08-20 window 46990. Still due: emf and the other kinds.
 - 🔧 **AC-5 Edit → Save mutations.** Editor onChange exports the zip into `document.data`; File → Save writes it. Verify: `exportFiles` writes turns/slides; `testExportMutationStaysTheKind`; log a session turn in Prim.app then Save.
 - ✅ **AC-6 Save As identity.** Save As of an opened pack still detects the same kind. Verify: `testSaveAsKeepsKind`.
 - ✅ **AC-7 New.** Untitled seeds a valid pack per registry type. Verify: `testNewPackDetectsEveryRegistryType`.

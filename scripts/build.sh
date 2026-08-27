@@ -1,5 +1,5 @@
 #!/bin/bash
-# Assemble Prim.app and sign it as a company app: Eidos AGI LLC Developer ID.
+# Assemble Prims Desktop.app and sign it as a company app: Eidos AGI LLC Developer ID.
 set -eo pipefail
 PKG="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$HOME/Applications/Prims Desktop.app"
@@ -14,12 +14,12 @@ swift build -c release --product PrimMac
 osascript -e 'quit app "Prims Desktop"' 2>/dev/null || true
 osascript -e 'quit app "Prim"' 2>/dev/null || true
 pkill -f "Prims Desktop.app/Contents/MacOS/Prim" 2>/dev/null || true
-pkill -f "Prim.app/Contents/MacOS/Prim" 2>/dev/null || true
+pkill -f "Prims Desktop.app/Contents/MacOS/Prim" 2>/dev/null || true
 sleep 0.4
 
 if [[ -d "$APP" ]]; then
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-  cp -R "$APP" "$HOME/Applications/Prim.app.bak-$stamp"
+  cp -R "$APP" "$HOME/Applications/Prims Desktop.app.bak-$stamp"
 fi
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -28,7 +28,7 @@ cp "$PKG/Info.plist" "$APP/Contents/Info.plist"
 echo -n "APPL????" > "$APP/Contents/PkgInfo"
 
 security find-certificate -c "$IDENTITY" >/dev/null 2>&1 || {
-  echo "FATAL: $IDENTITY not in keychain — refusing to sign Prim.app." >&2
+  echo "FATAL: $IDENTITY not in keychain — refusing to sign Prims Desktop.app." >&2
   exit 1
 }
 

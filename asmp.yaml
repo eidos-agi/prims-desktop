@@ -1,0 +1,67 @@
+asmp: "0.1"
+kind: service
+name: prims-desktop
+description: >
+  Mac host for Prim packs and Prim Tool connectors. Connectors plus the
+  prims-desktop CLI are the product. The window is secondary. Agents
+  configure and operate through the CLI, not by driving the glass.
+version: 0.1.0
+created_by: agent://primdesktop
+owner: eidos-agi
+section: tools
+
+aliases:
+  - prim-desktop
+  - prim-mac
+  - prim-mac-v1
+  - prims desktop
+
+runtime:
+  style: cli
+  entrypoint: prims-desktop
+  binary: ~/.local/bin/prims-desktop
+
+endpoints:
+  - protocol: cli
+    host: local
+    visibility: local
+    command: prims-desktop
+    note: connectors / status / receive / doctor / open
+
+capabilities:
+  provides:
+    - prims-desktop.host
+    - prims-desktop.cli
+    - connector.imessage-chatdb-receive
+    - connector.opff-dally-receive
+    - connector.docket-webmcp
+    - connector.prim-viewer-webmcp
+  requires:
+    - prim
+    - asmp.registry
+  optional:
+    - messages.local
+  anti_routes:
+    - prim.connector
+    - prim.surface
+    - desktop.prims.sh
+
+when_not_to_use:
+  - Do not treat the Swift window as the prove surface. Use prims-desktop CLI.
+  - Do not mint prim.connector or prim.surface pack types.
+  - Do not confuse this with prim-web or Volta.
+
+infra:
+  repo: ~/repos-eidos-agi/prims-desktop
+  github: https://github.com/eidos-agi/prims-desktop
+  app: ~/Applications/Prims Desktop.app
+  overlay: ~/.prim/registry.local.json
+  verify:
+    - prims-desktop doctor
+    - prims-desktop connectors
+    - ./scripts/prove.sh
+
+display:
+  icon: square.stack
+  label: Prims Desktop
+  section: tools

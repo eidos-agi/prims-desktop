@@ -12,7 +12,7 @@ is a view. The host is not the file.
 
 | id | pts | Great-great |
 |---|---:|---|
-| land | 20 | Double-click, Mail, Messages, `open -a Prim file.prim` open Prim.app on the citing tool — not a zip, not a tab, not “This tool runs locally.” |
+| land | 20 | Double-click, Mail, Messages, `open -a "Prims Desktop" file.prim` open Prim.app on the citing tool — not a zip, not a tab, not “This tool runs locally.” |
 | host | 15 | Every registered type hosts. Every citing surface and connector is choosable. Process tools stay local. |
 | file | 15 | File → Save writes the zip. Detect still returns the same kind. No sidecar store. In-memory editor mutations export into `document.data`. |
 | place | 15 | Each surface is a received document. OBIF: one scrolling book (cover, mark, type, voice, ground) in the Prim.app window (~672×524), first screen holds, no CMS tabs, no COVER stamp. |
