@@ -48,7 +48,10 @@ SKIPPED: list[tuple[str, str]] = []
 def run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PATH"] = str(HOME / ".local/bin") + ":" + str(HOME / ".asmp/bin") + ":" + env.get("PATH", "")
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+    except FileNotFoundError as e:
+        return subprocess.CompletedProcess(cmd, 127, "", str(e))
 
 
 def ok(cid: str, detail: str = "") -> None:
