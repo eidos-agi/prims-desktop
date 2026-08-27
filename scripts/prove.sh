@@ -40,6 +40,7 @@ if [[ -d ../prim-sim ]]; then
     --filter HostTests.testCLIConfigSetPreservesOpff \
     --filter HostTests.testCLIReceiveUnknownConnectorFails \
     --filter HostTests.testCLIReceiveRejectsNonIMessageConnector \
+    --filter HostTests.testReceiveJSONIncludesSenderIdentity \
     --filter HostTests.testRegistryListsConnectors \
     --filter HostTests.testNoMintedToolTypes \
     --filter HostTests.testPreferredConnectorIsIMessage \

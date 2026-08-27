@@ -17,6 +17,36 @@ public enum ChatDB {
         public var text: String
         public var fromMe: Bool
         public var date: Date?
+        /// `message.handle_id` → `handle.ROWID`. 0 when unset (typical for from-me).
+        public var handleId: Int64 = 0
+        /// `handle.id` — phone or email. Empty when there is no handle row.
+        public var identifier: String = ""
+        /// `chat.chat_identifier` via `chat_message_join`. Empty when unjoined.
+        public var chatIdentifier: String = ""
+        /// `chat.display_name`, else `message.cache_roomnames`. Empty if neither.
+        public var displayName: String = ""
+
+        /// Machine receive row. Existing keys stay; sender keys fail-closed here.
+        public func receiveJSON(textLimit: Int = 240) -> [String: Any] {
+            var row: [String: Any] = [
+                "ROWID": rowid,
+                "is_from_me": fromMe,
+                "text": Self.clip(text, textLimit),
+                "handle_id": handleId,
+                "identifier": identifier,
+                "chat_identifier": chatIdentifier,
+                "display_name": displayName,
+            ]
+            if let date {
+                row["date"] = ISO8601DateFormatter().string(from: date)
+            }
+            return row
+        }
+
+        public static func clip(_ text: String, _ n: Int) -> String {
+            if text.count <= n { return text }
+            return String(text.prefix(n)) + "…"
+        }
     }
 
     public struct Receive: Sendable {
@@ -61,7 +91,22 @@ public enum ChatDB {
             if let raw = row["date"] as? Int64 {
                 date = Date(timeIntervalSinceReferenceDate: Double(raw) / 1_000_000_000)
             }
-            messages.append(Message(rowid: rowid, text: text, fromMe: fromMe, date: date))
+            let handleId = (row["handle_id"] as? Int64) ?? 0
+            let identifier = (row["identifier"] as? String) ?? ""
+            let chatIdentifier = (row["chat_identifier"] as? String) ?? ""
+            let chatDisplay = (row["display_name"] as? String) ?? ""
+            let room = (row["cache_roomnames"] as? String) ?? ""
+            let displayName = !chatDisplay.isEmpty ? chatDisplay : room
+            messages.append(Message(
+                rowid: rowid,
+                text: text,
+                fromMe: fromMe,
+                date: date,
+                handleId: handleId,
+                identifier: identifier,
+                chatIdentifier: chatIdentifier,
+                displayName: displayName
+            ))
         }
         if messages.isEmpty {
             return Receive(
@@ -103,14 +148,39 @@ public enum ChatDB {
         return cleaned.isEmpty ? nil : str
     }
 
-    /// attributedBody BLOB decode when `text` is NULL. Same SQL as chatdb-extract --limit.
+    /// attributedBody BLOB decode when `text` is NULL. Same message columns as
+    /// chatdb-extract --limit, plus handle.id and chat via chat_message_join.
     private static func extractMessages(db: OpaquePointer, limit: Int) -> [[String: Any]] {
-        let baseColumns = """
-            ROWID, guid, text, handle_id, date, date_read, is_from_me, is_read,
-            cache_has_attachments, thread_originator_guid,
-            associated_message_guid, associated_message_type, cache_roomnames
-        """
-        let sql = "SELECT \(baseColumns), attributedBody FROM message ORDER BY ROWID DESC LIMIT \(limit)"
+        let sql = """
+            SELECT
+                message.ROWID,
+                message.guid,
+                message.text,
+                message.handle_id,
+                message.date,
+                message.date_read,
+                message.is_from_me,
+                message.is_read,
+                message.cache_has_attachments,
+                message.thread_originator_guid,
+                message.associated_message_guid,
+                message.associated_message_type,
+                message.cache_roomnames,
+                handle.id AS identifier,
+                chat.chat_identifier,
+                chat.display_name,
+                message.attributedBody
+            FROM message
+            LEFT JOIN handle ON handle.ROWID = message.handle_id
+            LEFT JOIN (
+                SELECT message_id, MIN(chat_id) AS chat_id
+                FROM chat_message_join
+                GROUP BY message_id
+            ) AS chat_message_join ON chat_message_join.message_id = message.ROWID
+            LEFT JOIN chat ON chat.ROWID = chat_message_join.chat_id
+            ORDER BY message.ROWID DESC
+            LIMIT \(limit)
+            """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
@@ -118,8 +188,14 @@ public enum ChatDB {
         var rows: [[String: Any]] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             var row: [String: Any] = [:]
-            for i: Int32 in 0..<13 {
+            let colCount = sqlite3_column_count(stmt)
+            var attributedBodyIndex: Int32?
+            for i: Int32 in 0..<colCount {
                 let name = String(cString: sqlite3_column_name(stmt, i))
+                if name == "attributedBody" {
+                    attributedBodyIndex = i
+                    continue
+                }
                 let type = sqlite3_column_type(stmt, i)
                 switch type {
                 case SQLITE_INTEGER:
@@ -134,10 +210,10 @@ public enum ChatDB {
                     row[name] = NSNull()
                 }
             }
-            if row["text"] is NSNull {
-                if sqlite3_column_type(stmt, 13) == SQLITE_BLOB,
-                   let bytes = sqlite3_column_blob(stmt, 13) {
-                    let size = Int(sqlite3_column_bytes(stmt, 13))
+            if row["text"] is NSNull, let blobIndex = attributedBodyIndex {
+                if sqlite3_column_type(stmt, blobIndex) == SQLITE_BLOB,
+                   let bytes = sqlite3_column_blob(stmt, blobIndex) {
+                    let size = Int(sqlite3_column_bytes(stmt, blobIndex))
                     if size > 0 {
                         let data = Data(bytes: bytes, count: size)
                         if let decoded = decodeAttributedBody(data) {

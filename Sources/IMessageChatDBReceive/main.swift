@@ -63,18 +63,7 @@ if !received.ok {
     ], status: 2)
 }
 
-var slimRows: [[String: Any]] = []
-for msg in received.messages {
-    var slim: [String: Any] = [
-        "ROWID": msg.rowid,
-        "is_from_me": msg.fromMe,
-        "text": msg.text.count > 240 ? String(msg.text.prefix(240)) + "…" : msg.text,
-    ]
-    if let date = msg.date {
-        slim["date"] = ISO8601DateFormatter().string(from: date)
-    }
-    slimRows.append(slim)
-}
+let slimRows = received.messages.map { $0.receiveJSON(textLimit: 240) }
 
 emit([
     "ok": true,

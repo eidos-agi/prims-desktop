@@ -238,6 +238,70 @@ final class HostTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("only imessage-chatdb-receive"), result.stderr)
     }
 
+    func testReceiveJSONIncludesSenderIdentity() throws {
+        let msg = ChatDB.Message(
+            rowid: 42,
+            text: "hello from rolodex",
+            fromMe: false,
+            date: Date(timeIntervalSinceReferenceDate: 0),
+            handleId: 7,
+            identifier: "+15555550100",
+            chatIdentifier: "+15555550100",
+            displayName: ""
+        )
+        let row = msg.receiveJSON(textLimit: 240)
+        XCTAssertEqual(row["ROWID"] as? Int64, 42)
+        XCTAssertEqual(row["is_from_me"] as? Bool, false)
+        XCTAssertEqual(row["text"] as? String, "hello from rolodex")
+        XCTAssertNotNil(row["date"])
+        XCTAssertEqual(row["handle_id"] as? Int64, 7)
+        XCTAssertEqual(row["identifier"] as? String, "+15555550100")
+        XCTAssertEqual(row["chat_identifier"] as? String, "+15555550100")
+        XCTAssertEqual(row["display_name"] as? String, "")
+        for key in ["ROWID", "is_from_me", "text", "handle_id", "identifier", "chat_identifier", "display_name"] {
+            XCTAssertNotNil(row[key], "receive JSON dropped \(key)")
+        }
+
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chatdb = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/ChatDB.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(chatdb.contains("public var handleId: Int64"), "ChatDB.Message dropped handleId")
+        XCTAssertTrue(chatdb.contains("public var identifier: String"), "ChatDB.Message dropped identifier")
+        XCTAssertTrue(chatdb.contains("public var chatIdentifier: String"), "ChatDB.Message dropped chatIdentifier")
+        XCTAssertTrue(chatdb.contains("public var displayName: String"), "ChatDB.Message dropped displayName")
+        XCTAssertTrue(chatdb.contains("LEFT JOIN handle"), "extractMessages must join handle")
+        XCTAssertTrue(chatdb.contains("chat_message_join"), "extractMessages must join chat_message_join")
+        XCTAssertTrue(chatdb.contains("chat.chat_identifier"), "extractMessages must read chat.chat_identifier")
+        XCTAssertTrue(chatdb.contains("\"identifier\""), "receiveJSON dropped identifier")
+        XCTAssertTrue(chatdb.contains("\"handle_id\""), "receiveJSON dropped handle_id")
+
+        let cli = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/DesktopCLI.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(cli.contains("receiveJSON"), "DesktopCLI receive must emit Message.receiveJSON")
+
+        let live = DesktopCLI.invoke(["receive", "imessage-chatdb-receive", "--json", "--limit", "3"])
+        let data = try XCTUnwrap(live.stdout.data(using: .utf8))
+        let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        if let messages = obj["messages"] as? [[String: Any]], !messages.isEmpty {
+            for row in messages {
+                let hasSender = row["identifier"] != nil || row["handle_id"] != nil
+                XCTAssertTrue(hasSender, "receive --json dropped identifier/handle_id: \(row.keys.sorted())")
+                XCTAssertNotNil(row["ROWID"], "receive --json dropped ROWID")
+                XCTAssertNotNil(row["is_from_me"], "receive --json dropped is_from_me")
+                XCTAssertNotNil(row["text"], "receive --json dropped text")
+                XCTAssertNotNil(row["chat_identifier"], "receive --json dropped chat_identifier")
+                XCTAssertNotNil(row["display_name"], "receive --json dropped display_name")
+            }
+        }
+    }
+
     func testASMPLiveCapsFollowHostCatalog() throws {
         let catalog = try HostCatalog.load()
         let connectors = HostUI.connectors(catalog.registry.tools)

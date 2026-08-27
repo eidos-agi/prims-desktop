@@ -167,6 +167,28 @@ def check_source_identity() -> None:
     else:
         fail("fda_note_exact", "locked FDA sentence missing")
 
+    chatdb = (ROOT / "Sources/PrimMacCore/ChatDB.swift").read_text()
+    cli = (ROOT / "Sources/PrimMacCore/DesktopCLI.swift").read_text()
+    sender_need = [
+        "public var handleId: Int64",
+        "public var identifier: String",
+        "public var chatIdentifier: String",
+        "public var displayName: String",
+        "LEFT JOIN handle",
+        "chat_message_join",
+        '"handle_id"',
+        '"identifier"',
+        '"chat_identifier"',
+        '"display_name"',
+    ]
+    sender_missing = [n for n in sender_need if n not in chatdb]
+    if sender_missing:
+        fail("receive_json_sender_identity_source", f"ChatDB dropped {sender_missing}")
+    elif "receiveJSON" not in cli:
+        fail("receive_json_sender_identity_source", "DesktopCLI receive must emit Message.receiveJSON")
+    else:
+        ok("receive_json_sender_identity_source")
+
 
 def check_identity() -> None:
     if ROOT.name == ASKED_DIR:
@@ -689,6 +711,34 @@ def check_deep() -> None:
         ok("receive_non_imessage_fails")
     else:
         fail("receive_non_imessage_fails", f"exit={rec2.returncode} {rec2.stdout[:160]}")
+
+    rec3 = run(["prims-desktop", "--json", "receive", "imessage-chatdb-receive", "--limit", "3"])
+    try:
+        body3 = json.loads(rec3.stdout or "{}")
+    except json.JSONDecodeError:
+        body3 = {}
+    msgs = body3.get("messages") or []
+    if body3.get("ok") and msgs:
+        dropped = []
+        for i, m in enumerate(msgs):
+            if not isinstance(m, dict):
+                dropped.append(f"{i}:not-object")
+                continue
+            if "identifier" not in m and "handle_id" not in m:
+                dropped.append(f"{i}:identifier/handle_id")
+            for k in ("ROWID", "is_from_me", "text", "chat_identifier", "display_name"):
+                if k not in m:
+                    dropped.append(f"{i}:{k}")
+        if dropped:
+            fail("receive_json_sender_identity", f"dropped {dropped}")
+        else:
+            ok("receive_json_sender_identity", f"{len(msgs)} rows")
+    elif body3.get("ok") is False:
+        skip("receive_json_sender_identity", "chat.db not readable; source check is fail-closed")
+    elif body3.get("ok") and not msgs:
+        skip("receive_json_sender_identity", "no messages; source check is fail-closed")
+    else:
+        fail("receive_json_sender_identity", f"exit={rec3.returncode} {(rec3.stdout or rec3.stderr)[:160]}")
 
     link = HOME / ".local/bin/prim-desktop"
     target = HOME / ".local/bin/prims-desktop"
