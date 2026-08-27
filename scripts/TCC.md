@@ -27,10 +27,12 @@ That helper may LaunchServices-open the bundle or talk XPC. It must not
 `sqlite3_open` `chat.db`. Do not exec `Contents/MacOS/Prim` from PATH and
 expect FDA.
 
-**FDA prove is the in-app Messages path** (Settings “Connected” / stage
-transcript first rows) in the running `Prims Desktop.app`. Piped
-`prims-desktop doctor --json` is not the acceptance test. CLI doctor may
-echo what the app already opened, after the UI path works.
+**FDA prove is the in-app Messages path** (Settings “Connected” / Connectors
+stage first rows) in the running `Prims Desktop.app`. The app process opens
+`chat.db` itself (`DeskModel` / `StageView` / `DeskSettings`). Do not wait
+on PATH or XPC. Piped `prims-desktop doctor --json` is not the acceptance
+test. Three doors only: Viewer, Connectors, Chat. Messages rows live on
+Connectors (iMessage). No fourth door.
 
 Do not use `~/Applications/Prims Desktop.app`. Do not leave
 `/Applications/Prims Desktop.app.bak*` or `Prim.app.bak*`.

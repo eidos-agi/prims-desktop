@@ -3,18 +3,19 @@ import PrimMacCore
 import PrimSimCore
 import SwiftUI
 
-/// Left rail of work. Accounts now; chats later. Collapse is icons (~56pt), not gone.
+/// Left rail: exactly three doors. Connector accounts are Connectors content, not a fourth door.
 struct WorkRail: View {
     @EnvironmentObject private var desk: DeskModel
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            if desk.railIcons {
-                iconList
-            } else {
+            doorList
+            if desk.door == .connectors, !desk.railIcons {
+                Divider()
                 accountList
             }
+            Spacer(minLength: 0)
         }
         .navigationSplitViewColumnWidth(
             min: desk.railIcons ? 56 : 240,
@@ -26,7 +27,7 @@ struct WorkRail: View {
     private var header: some View {
         HStack(spacing: 8) {
             if !desk.railIcons {
-                Text("Accounts")
+                Text("Prims Desktop")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -45,6 +46,47 @@ struct WorkRail: View {
         .padding(.vertical, 10)
     }
 
+    private var doorList: some View {
+        VStack(spacing: desk.railIcons ? 6 : 2) {
+            ForEach(DeskDoor.allCases) { door in
+                doorRow(door)
+            }
+        }
+        .padding(.horizontal, desk.railIcons ? 10 : 8)
+        .padding(.bottom, 8)
+    }
+
+    @ViewBuilder
+    private func doorRow(_ door: DeskDoor) -> some View {
+        let on = desk.door == door
+        Button {
+            desk.didSelectDoor(door)
+        } label: {
+            if desk.railIcons {
+                AccountAvatar(icon: door.icon, on: on)
+            } else {
+                HStack(spacing: 10) {
+                    Image(systemName: door.icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 20)
+                    Text(door.title)
+                        .font(.system(size: 13, weight: .medium))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(on ? Color.primary.opacity(0.08) : Color.clear)
+                )
+            }
+        }
+        .buttonStyle(.plain)
+        .help(door.title)
+        .accessibilityLabel(door.title)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
     private var accountList: some View {
         List(desk.connectors, selection: $desk.selected) { tool in
             AccountRow(tool: tool, preview: preview(for: tool))
@@ -56,26 +98,6 @@ struct WorkRail: View {
         .onChange(of: desk.selected) { name in
             desk.didSelect(name)
         }
-    }
-
-    private var iconList: some View {
-        VStack(spacing: 6) {
-            ForEach(desk.connectors) { tool in
-                let on = tool.name == desk.selected
-                Button {
-                    desk.didSelect(tool.name)
-                } label: {
-                    AccountAvatar(icon: ConnectorFace.icon(tool), on: on)
-                }
-                .buttonStyle(.plain)
-                .help(ConnectorFace.title(tool))
-                .accessibilityLabel(ConnectorFace.title(tool))
-                .contextMenu { overflow(for: tool) }
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder

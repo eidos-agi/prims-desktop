@@ -42,6 +42,13 @@ if "in-app Messages" not in tcc:
     raise SystemExit("TCC.md must say FDA prove is the in-app Messages path")
 if "doctor_chatdb_inherits_app_fda" in (root / "scripts/litmus.py").read_text():
     raise SystemExit("litmus must not treat piped doctor chat_db_readable as the FDA gate")
+desk = (root / "Sources/PrimMac/DeskModel.swift").read_text()
+if "tryRevealMessages" not in desk or "ChatDB.receive" not in desk:
+    raise SystemExit("DeskModel must open chat.db in the app process and poll until rows appear")
+if "PrimsDesktopXPC" in desk:
+    raise SystemExit("TASK-0014 must not block Messages rows on XPC")
+if "enum DeskDoor" not in desk or "case viewer" not in desk or "case connectors" not in desk or "case chat" not in desk:
+    raise SystemExit("three doors must be Viewer, Connectors, Chat")
 build = (root / "scripts/build.sh").read_text().replace("\\\n", " ")
 if ".app.bak" in build:
     raise SystemExit("build.sh still mints bak apps")
@@ -107,7 +114,8 @@ if [[ -d ../prim-sim ]]; then
     --filter HostTests.testCLIEntryIsProcessMainNotSwiftUIInit \
     --filter HostTests.testBuildScriptDoesNotDeepStompIdentifiers \
     --filter HostTests.testTrampolineAndInstallCLIExecAppExecutable \
-    --filter HostTests.testFDAProveIsInAppMessagesNotPipedDoctor
+    --filter HostTests.testFDAProveIsInAppMessagesNotPipedDoctor \
+    --filter HostTests.testThreeDoorsAreViewerConnectorsChat
 else
   echo "skip swift test (../prim-sim missing)"
 fi

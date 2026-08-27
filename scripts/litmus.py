@@ -1083,23 +1083,37 @@ def check_tcc_identity() -> None:
             fail(cid, ident or blob.replace("\n", " ")[:160])
 
     # FDA prove is the in-app Messages stage (Connected / first rows), not
-    # piped `prims-desktop doctor --json` chat_db_readable.
+    # piped `prims-desktop doctor --json` chat_db_readable. Independent of XPC.
     stage = (ROOT / "Sources" / "PrimMac" / "UI" / "StageView.swift").read_text()
     settings = (ROOT / "Sources" / "PrimMac" / "UI" / "DeskSettings.swift").read_text()
     desk = (ROOT / "Sources" / "PrimMac" / "DeskModel.swift").read_text()
+    host = (ROOT / "Sources" / "PrimMac" / "HostView.swift").read_text()
+    rail = (ROOT / "Sources" / "PrimMac" / "UI" / "WorkRail.swift").read_text()
     if (
         "MessageTranscript" in stage
         and "ChatDB.health()" in stage
         and "iMessage is connected" in stage
+        and "ProductIdentity.fdaNote" in stage
         and 'ChatDB.health() ? "Connected"' in settings
         and "ChatDB.receive" in desk
+        and "tryRevealMessages" in desk
+        and "beginWatchingGrant" in desk
+        and "didBecomeActiveNotification" in desk
+        and "PrimsDesktopXPC" not in desk
+        and "FDARequestSheet" in host
+        and "ProductIdentity.fdaNote" in host
+        and "enum DeskDoor" in desk
+        and "case viewer" in desk
+        and "case connectors" in desk
+        and "case chat" in desk
+        and "ForEach(DeskDoor.allCases)" in rail
         and "sqlite3_open" not in client_src
     ):
         ok("fda_prove_is_in_app_messages")
     else:
         fail(
             "fda_prove_is_in_app_messages",
-            "FDA prove must be StageView/DeskSettings Messages in the app process",
+            "FDA prove must be StageView/DeskSettings Messages in the app process (no XPC, three doors)",
         )
 
 

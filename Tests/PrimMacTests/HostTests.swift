@@ -515,13 +515,72 @@ final class HostTests: XCTestCase {
         XCTAssertTrue(stage.contains("MessageTranscript"))
         XCTAssertTrue(stage.contains("ChatDB.health()"))
         XCTAssertTrue(stage.contains("iMessage is connected"))
+        XCTAssertTrue(stage.contains("ProductIdentity.fdaNote"))
         XCTAssertTrue(settings.contains("ChatDB.health() ? \"Connected\""))
+        XCTAssertTrue(settings.contains("desk.grantFDA()"))
+        XCTAssertTrue(settings.contains("tryRevealMessages"))
         XCTAssertTrue(desk.contains("ChatDB.receive"))
+        XCTAssertTrue(desk.contains("tryRevealMessages"))
+        XCTAssertTrue(desk.contains("beginWatchingGrant"))
+        XCTAssertTrue(desk.contains("didBecomeActiveNotification"))
+        XCTAssertTrue(desk.contains("ChatDB.openSettings()"))
+        XCTAssertFalse(desk.contains("PrimsDesktopXPC"))
         XCTAssertFalse(client.contains("sqlite3_open"))
         XCTAssertFalse(client.contains("ChatDB"))
         XCTAssertFalse(litmus.contains("doctor_chatdb_inherits_app_fda"))
         XCTAssertFalse(litmus.contains("doctor_json_on_pipe"))
         XCTAssertTrue(litmus.contains("fda_prove_is_in_app_messages"))
+        let host = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/HostView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(host.contains("FDARequestSheet"))
+        XCTAssertTrue(host.contains("ProductIdentity.fdaNote"))
+        XCTAssertFalse(host.contains("LibrarySidebar"))
+        XCTAssertFalse(host.contains("RegistrySidebar"))
+    }
+
+    func testThreeDoorsAreViewerConnectorsChat() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let desk = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/DeskModel.swift"),
+            encoding: .utf8
+        )
+        let rail = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/UI/WorkRail.swift"),
+            encoding: .utf8
+        )
+        let stage = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/UI/StageView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(desk.contains("enum DeskDoor"))
+        XCTAssertTrue(desk.contains("case viewer"))
+        XCTAssertTrue(desk.contains("case connectors"))
+        XCTAssertTrue(desk.contains("case chat"))
+        XCTAssertTrue(desk.contains("CaseIterable"))
+        XCTAssertEqual(
+            desk.components(separatedBy: "case ").filter { $0.hasPrefix("viewer") || $0.hasPrefix("connectors") || $0.hasPrefix("chat") }.count,
+            3,
+            "exactly three doors"
+        )
+        XCTAssertFalse(desk.contains("case messages"))
+        XCTAssertFalse(desk.contains("case paseo"))
+        XCTAssertFalse(desk.contains("case registry"))
+        XCTAssertFalse(desk.contains("case drive"))
+        XCTAssertTrue(rail.contains("ForEach(DeskDoor.allCases)"))
+        XCTAssertTrue(rail.contains("door.title"))
+        XCTAssertTrue(stage.contains("case .viewer:"))
+        XCTAssertTrue(stage.contains("case .connectors:"))
+        XCTAssertTrue(stage.contains("case .chat:"))
+        XCTAssertTrue(stage.contains("Messages live under Connectors"))
+        let transcriptRange = try XCTUnwrap(stage.range(of: "MessageTranscript"))
+        let chatCase = try XCTUnwrap(stage.range(of: "case .chat:"))
+        XCTAssertTrue(transcriptRange.lowerBound < chatCase.lowerBound || stage.contains("connectorsStage"))
+        XCTAssertFalse(stage.contains("case .messages"))
     }
 
     func testSourcesDoNotAskFDAForLooseCLI() throws {

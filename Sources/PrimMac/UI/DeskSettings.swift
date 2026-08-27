@@ -44,11 +44,11 @@ struct DeskSettingsView: View {
                         LabeledContent("Readable", value: ChatDB.health() ? "Yes" : "No")
                         if !ChatDB.health() {
                             Button("Grant Full Disk Access…") {
-                                ChatDB.openSettings()
+                                desk.grantFDA()
                             }
                         }
                         Button("Check again") {
-                            desk.refresh(tool)
+                            desk.tryRevealMessages()
                         }
                     }
                 } else {
