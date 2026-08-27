@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>sh.prims.desktop.xpc</string>
+	<key>BundleProgram</key>
+	<string>Contents/Helpers/prims-desktop</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>--xpc-broker</string>
+	</array>
+	<key>MachServices</key>
+	<dict>
+		<key>Y6CQ4SWPWM.sh.prims.desktop.xpc</key>
+		<true/>
+	</dict>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>sh.prims.desktop</string>
+	</array>
+</dict>
+</plist>

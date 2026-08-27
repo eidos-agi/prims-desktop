@@ -28,11 +28,13 @@ That helper may LaunchServices-open the bundle or talk XPC. It must not
 expect FDA.
 
 XPC rendezvous is the named mach service
-`Y6CQ4SWPWM.sh.prims.desktop.xpc` plus a unix socket. Both sides verify
-the peer (Team `Y6CQ4SWPWM`, Identifier `sh.prims.desktop`). Do not write
-`NSXPCListenerEndpoint` with `NSKeyedArchiver` (NSCocoaErrorDomain 4866).
-If the app is not running, LS-open the bundle. TASK-0015 is this
-rendezvous, not the FDA prove.
+`Y6CQ4SWPWM.sh.prims.desktop.xpc` (LaunchAgent + `NSXPCConnection`).
+Both sides verify the peer (Team `Y6CQ4SWPWM`, Identifier
+`sh.prims.desktop`). The app registers its anonymous listener endpoint
+over XPC, never via `NSKeyedArchiver` (NSCocoaErrorDomain 4866). If the
+app is not running, LS-open the bundle. Enabling the XPC LaunchAgent
+in Login Items is not an FDA grant. TASK-0015 is this rendezvous, not
+the FDA prove.
 
 **FDA prove is the in-app Messages path** (Settings “Connected” / Connectors
 stage first rows) in the running `Prims Desktop.app`. The app process opens

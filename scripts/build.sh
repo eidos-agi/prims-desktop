@@ -1,7 +1,7 @@
 #!/bin/bash
 # Assemble /Applications/Prims Desktop.app and sign it as a company app.
-# PATH CLI execs Contents/MacOS/Prim (bundle executable, TCC client_type 0).
-# Helpers stay inside the bundle for in-app spawn only — do not exec them from a shell.
+# PATH CLI is a trampoline to Contents/Helpers/prims-desktop (XPC client).
+# Do not exec Contents/MacOS/Prim from a shell. Helpers are not FDA clients.
 # Never codesign --deep the .app (that resets nested Identifier to the Mach-O filename).
 # Never leave /Applications/*.bak* — those are TCC ghosts.
 # This VM cannot codesign. Run on the Mac that has the Developer ID identity.
@@ -29,10 +29,13 @@ sleep 0.4
 
 STAGE_ROOT="$(mktemp -d /tmp/prims-desktop-stage.XXXXXX)"
 STAGE="$STAGE_ROOT/Prims Desktop.app"
-mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources" "$STAGE/Contents/Helpers"
+mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources" "$STAGE/Contents/Helpers" \
+  "$STAGE/Contents/Library/LaunchAgents"
 cp "$BIN" "$STAGE/Contents/MacOS/Prim"
 cp "$CLI" "$STAGE/Contents/Helpers/prims-desktop"
 cp "$CHATDB" "$STAGE/Contents/Helpers/imessage-chatdb-receive"
+cp "$PKG/LaunchAgents/sh.prims.desktop.xpc.plist" \
+  "$STAGE/Contents/Library/LaunchAgents/sh.prims.desktop.xpc.plist"
 chmod 755 "$STAGE/Contents/MacOS/Prim" \
   "$STAGE/Contents/Helpers/prims-desktop" \
   "$STAGE/Contents/Helpers/imessage-chatdb-receive"
@@ -98,7 +101,7 @@ fi
 
 echo "built $APP"
 echo "principal $APP/Contents/MacOS/Prim"
-echo "helpers $APP/Contents/Helpers/prims-desktop (PATH XPC client — does not open chat.db)"
+echo "helpers $APP/Contents/Helpers/prims-desktop (PATH XPC client / --xpc-broker)"
 echo "helpers $APP/Contents/Helpers/imessage-chatdb-receive (in-app spawn only — do not exec from PATH)"
 echo "next: ./scripts/install-cli.sh"
 echo "do not install deploy/prims-desktop.fulldisk.mobileconfig"

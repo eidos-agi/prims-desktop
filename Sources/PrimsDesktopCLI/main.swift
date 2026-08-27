@@ -1,6 +1,11 @@
 import Darwin
 import PrimMacCore
 
-/// Thin PATH client. Does not open chat.db. Talks XPC to the LS-launched app.
-let status = PrimsDesktopXPCClient.run(Array(CommandLine.arguments.dropFirst()))
+/// Thin PATH client, or launchd broker when argv is --xpc-broker.
+/// Never opens chat.db.
+if CommandLine.arguments.contains(ProductIdentity.xpcBrokerFlag) {
+    PrimsDesktopXPCBroker.run()
+}
+let args = Array(CommandLine.arguments.dropFirst())
+let status = PrimsDesktopXPCClient.run(args)
 ProcessExit.flushAndExit(status)

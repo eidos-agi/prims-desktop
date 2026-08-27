@@ -1,26 +1,18 @@
 import AppKit
-import Darwin
 import Foundation
 import Security
+import ServiceManagement
 
-/// XPC contract. The LS-launched app process exports this; PATH is the client.
-/// ChatDB runs only in the app. The client never calls sqlite3_open.
-@objc public protocol PrimsDesktopXPCProtocol {
+/// Broker contract on the named mach service. Endpoint is passed over XPC
+/// (NSXPCCoder). Never written to disk.
+@objc public protocol PrimsDesktopXPCBrokerProtocol {
+    func registerAppEndpoint(_ endpoint: NSXPCListenerEndpoint, reply: @escaping (Bool) -> Void)
     func runCommand(_ args: [String], reply: @escaping (Int32, Data, Data) -> Void)
 }
 
-/// App-side XPC object. Invokes DesktopCLI in this process (the FDA client).
-final class PrimsDesktopXPCService: NSObject, PrimsDesktopXPCProtocol {
-    func runCommand(_ args: [String], reply: @escaping (Int32, Data, Data) -> Void) {
-        DispatchQueue.main.async {
-            let result = DesktopCLI.invoke(args)
-            reply(
-                result.status,
-                Data(result.stdout.utf8),
-                Data(result.stderr.utf8)
-            )
-        }
-    }
+/// App-side contract. ChatDB / DesktopCLI run only in the LS-launched app.
+@objc public protocol PrimsDesktopXPCProtocol {
+    func runCommand(_ args: [String], reply: @escaping (Int32, Data, Data) -> Void)
 }
 
 /// Peer must be Developer ID Team Y6CQ4SWPWM and Identifier sh.prims.desktop.
@@ -45,24 +37,128 @@ public enum XPCPeerTrust {
         let team = info[kSecCodeInfoTeamIdentifier as String] as? String ?? ""
         return ident == ProductIdentity.bundleIdentifier && team == ProductIdentity.teamID
     }
+}
 
-    public static func peerPID(of fd: Int32) -> pid_t? {
-        var pid: pid_t = 0
-        var len = socklen_t(MemoryLayout<pid_t>.size)
-        let rc = getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &len)
-        return rc == 0 && pid > 0 ? pid : nil
+/// Registers the bundled LaunchAgent so launchd owns the named mach service.
+public enum PrimsDesktopXPCAgent {
+    public static func ensureRegistered() {
+        let service = SMAppService.agent(plistName: ProductIdentity.xpcAgentPlistName)
+        if service.status == .enabled { return }
+        try? service.register()
     }
 }
 
-/// Hosted by the LaunchServices-launched app (glass or `--xpc-serve`).
-/// Named mach service + unix socket. Never archives NSXPCListenerEndpoint.
+/// launchd starts this (`--xpc-broker`). No ChatDB. Forwards to the app endpoint.
+public final class PrimsDesktopXPCBroker: NSObject, NSXPCListenerDelegate {
+    public static let shared = PrimsDesktopXPCBroker()
+
+    private let listener = NSXPCListener(machServiceName: ProductIdentity.xpcServiceName)
+    private let lock = NSLock()
+    private var appEndpoint: NSXPCListenerEndpoint?
+
+    override private init() {
+        super.init()
+    }
+
+    public static func run() -> Never {
+        shared.start()
+        RunLoop.main.run()
+        fatalError("broker runloop returned")
+    }
+
+    public func start() {
+        listener.delegate = self
+        listener.resume()
+    }
+
+    public func listener(
+        _ listener: NSXPCListener,
+        shouldAcceptNewConnection newConnection: NSXPCConnection
+    ) -> Bool {
+        guard XPCPeerTrust.isTrusted(pid: newConnection.processIdentifier) else {
+            return false
+        }
+        let service = BrokerService(owner: self, connection: newConnection)
+        newConnection.exportedInterface = NSXPCInterface(with: PrimsDesktopXPCBrokerProtocol.self)
+        newConnection.exportedObject = service
+        newConnection.resume()
+        return true
+    }
+
+    fileprivate func setAppEndpoint(_ endpoint: NSXPCListenerEndpoint?) {
+        lock.lock()
+        appEndpoint = endpoint
+        lock.unlock()
+    }
+
+    fileprivate func currentAppEndpoint() -> NSXPCListenerEndpoint? {
+        lock.lock()
+        defer { lock.unlock() }
+        return appEndpoint
+    }
+}
+
+private final class BrokerService: NSObject, PrimsDesktopXPCBrokerProtocol {
+    private weak var owner: PrimsDesktopXPCBroker?
+    private weak var connection: NSXPCConnection?
+
+    init(owner: PrimsDesktopXPCBroker, connection: NSXPCConnection) {
+        self.owner = owner
+        self.connection = connection
+    }
+
+    func registerAppEndpoint(_ endpoint: NSXPCListenerEndpoint, reply: @escaping (Bool) -> Void) {
+        guard let pid = connection?.processIdentifier, XPCPeerTrust.isTrusted(pid: pid) else {
+            reply(false)
+            return
+        }
+        owner?.setAppEndpoint(endpoint)
+        reply(true)
+    }
+
+    func runCommand(_ args: [String], reply: @escaping (Int32, Data, Data) -> Void) {
+        guard let pid = connection?.processIdentifier, XPCPeerTrust.isTrusted(pid: pid) else {
+            reply(2, Data(), Data("prims-desktop: untrusted XPC peer\n".utf8))
+            return
+        }
+        guard let endpoint = owner?.currentAppEndpoint() else {
+            reply(2, Data(), Data("prims-desktop: app XPC not ready — open Prims Desktop.app via LaunchServices\n".utf8))
+            return
+        }
+        let app = NSXPCConnection(listenerEndpoint: endpoint)
+        app.remoteObjectInterface = NSXPCInterface(with: PrimsDesktopXPCProtocol.self)
+        let sem = DispatchSemaphore(value: 0)
+        var out: (Int32, Data, Data)?
+        app.invalidationHandler = { sem.signal() }
+        app.interruptionHandler = { sem.signal() }
+        app.resume()
+        guard let proxy = app.remoteObjectProxy as? PrimsDesktopXPCProtocol else {
+            app.invalidate()
+            reply(2, Data(), Data("prims-desktop: app XPC proxy missing\n".utf8))
+            return
+        }
+        proxy.runCommand(args) { status, stdout, stderr in
+            out = (status, stdout, stderr)
+            sem.signal()
+        }
+        _ = sem.wait(timeout: .now() + 20)
+        app.invalidate()
+        if let out {
+            reply(out.0, out.1, out.2)
+        } else {
+            reply(2, Data(), Data("prims-desktop: app XPC timed out\n".utf8))
+        }
+    }
+}
+
+/// LS-launched app. Anonymous listener; endpoint registered over the named service.
 public final class PrimsDesktopXPCHost: NSObject, NSXPCListenerDelegate {
     public static let shared = PrimsDesktopXPCHost()
 
-    private let machListener = NSXPCListener(machServiceName: ProductIdentity.xpcServiceName)
-    private let service = PrimsDesktopXPCService()
+    private let anonymous = NSXPCListener.anonymous()
+    private let service = AppXPCService()
     private var started = false
-    private var listenFD: Int32 = -1
+    private var brokerConnection: NSXPCConnection?
 
     override private init() {
         super.init()
@@ -72,9 +168,10 @@ public final class PrimsDesktopXPCHost: NSObject, NSXPCListenerDelegate {
         guard !started else { return }
         started = true
         try? FileManager.default.removeItem(at: ProductIdentity.staleXpcEndpointURL())
-        machListener.delegate = self
-        machListener.resume()
-        startSocketListener()
+        PrimsDesktopXPCAgent.ensureRegistered()
+        anonymous.delegate = self
+        anonymous.resume()
+        registerWithBroker()
         Self.ensureHealthInApp()
     }
 
@@ -98,86 +195,20 @@ public final class PrimsDesktopXPCHost: NSObject, NSXPCListenerDelegate {
         return true
     }
 
-    private func startSocketListener() {
-        let url = ProductIdentity.xpcSocketURL()
-        let dir = url.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(
-            at: dir,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
-        )
-        unlink(url.path)
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else {
-            fputs("prims-desktop: XPC socket() failed\n", stderr)
-            return
-        }
-        var addr = sockaddr_un()
-        guard Self.fillUnix(&addr, path: url.path) else {
-            close(fd)
-            fputs("prims-desktop: XPC socket path too long\n", stderr)
-            return
-        }
-        let bindRC = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                bind(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
+    private func registerWithBroker() {
+        let connection = NSXPCConnection(machServiceName: ProductIdentity.xpcServiceName)
+        connection.remoteObjectInterface = NSXPCInterface(with: PrimsDesktopXPCBrokerProtocol.self)
+        connection.invalidationHandler = { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                self?.registerWithBroker()
             }
         }
-        guard bindRC == 0, listen(fd, 16) == 0 else {
-            close(fd)
-            fputs("prims-desktop: XPC bind/listen failed\n", stderr)
+        connection.resume()
+        brokerConnection = connection
+        guard let proxy = connection.remoteObjectProxy as? PrimsDesktopXPCBrokerProtocol else {
             return
         }
-        chmod(url.path, 0o600)
-        listenFD = fd
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.acceptLoop()
-        }
-    }
-
-    private func acceptLoop() {
-        let fd = listenFD
-        guard fd >= 0 else { return }
-        while true {
-            let client = accept(fd, nil, nil)
-            if client < 0 {
-                if errno == EINTR { continue }
-                break
-            }
-            DispatchQueue.global(qos: .userInitiated).async {
-                self.handleSocket(client)
-            }
-        }
-    }
-
-    private func handleSocket(_ fd: Int32) {
-        defer { close(fd) }
-        guard let pid = XPCPeerTrust.peerPID(of: fd), XPCPeerTrust.isTrusted(pid: pid) else {
-            return
-        }
-        guard let payload = XPCFrame.read(fd),
-              let cmd = try? JSONDecoder().decode(XPCCommand.self, from: payload)
-        else {
-            return
-        }
-        let result = DispatchQueue.main.sync {
-            DesktopCLI.invoke(cmd.args)
-        }
-        let reply = XPCReply(status: result.status, stdout: result.stdout, stderr: result.stderr)
-        guard let data = try? JSONEncoder().encode(reply) else { return }
-        _ = XPCFrame.write(fd, data)
-    }
-
-    fileprivate static func fillUnix(_ addr: inout sockaddr_un, path: String) -> Bool {
-        addr.sun_family = sa_family_t(AF_UNIX)
-        return path.withCString { src in
-            let n = strlen(src) + 1
-            return withUnsafeMutableBytes(of: &addr.sun_path) { raw -> Bool in
-                guard n <= raw.count, let dst = raw.baseAddress else { return false }
-                memcpy(dst, src, n)
-                return true
-            }
-        }
+        proxy.registerAppEndpoint(anonymous.endpoint) { _ in }
     }
 
     private static func ensureHealthInApp() {
@@ -188,62 +219,16 @@ public final class PrimsDesktopXPCHost: NSObject, NSXPCListenerDelegate {
     }
 }
 
-private struct XPCCommand: Codable {
-    var args: [String]
-}
-
-private struct XPCReply: Codable {
-    var status: Int32
-    var stdout: String
-    var stderr: String
-}
-
-private enum XPCFrame {
-    static func write(_ fd: Int32, _ data: Data) -> Bool {
-        guard data.count < 8_000_000 else { return false }
-        var n = UInt32(data.count).bigEndian
-        let header = withUnsafeBytes(of: &n) { Data($0) }
-        return writeAll(fd, header) && writeAll(fd, data)
-    }
-
-    static func read(_ fd: Int32) -> Data? {
-        guard let header = readExact(fd, 4) else { return nil }
-        let n = header.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-        guard n > 0, n < 8_000_000 else { return nil }
-        return readExact(fd, Int(n))
-    }
-
-    private static func writeAll(_ fd: Int32, _ data: Data) -> Bool {
-        data.withUnsafeBytes { raw in
-            var sent = 0
-            let total = raw.count
-            guard let base = raw.baseAddress else { return false }
-            while sent < total {
-                let n = Darwin.write(fd, base.advanced(by: sent), total - sent)
-                if n <= 0 { return false }
-                sent += n
-            }
-            return true
+private final class AppXPCService: NSObject, PrimsDesktopXPCProtocol {
+    func runCommand(_ args: [String], reply: @escaping (Int32, Data, Data) -> Void) {
+        DispatchQueue.main.async {
+            let result = DesktopCLI.invoke(args)
+            reply(result.status, Data(result.stdout.utf8), Data(result.stderr.utf8))
         }
     }
-
-    private static func readExact(_ fd: Int32, _ count: Int) -> Data? {
-        var data = Data(count: count)
-        let ok = data.withUnsafeMutableBytes { raw -> Bool in
-            var got = 0
-            guard let base = raw.baseAddress else { return false }
-            while got < count {
-                let n = Darwin.read(fd, base.advanced(by: got), count - got)
-                if n <= 0 { return false }
-                got += n
-            }
-            return true
-        }
-        return ok ? data : nil
-    }
 }
 
-/// PATH / helper thin client. Launches the app via LaunchServices if needed.
+/// PATH / helper thin client. NSXPCConnection to the named mach service.
 /// Does not open chat.db. Does not archive NSXPCListenerEndpoint.
 public enum PrimsDesktopXPCClient {
     public static func run(_ args: [String]) -> Int32 {
@@ -290,13 +275,8 @@ public enum PrimsDesktopXPCClient {
     }
 
     private static func tryConnect(_ args: [String]) -> (Int32, Data, Data)? {
-        if let result = tryConnectMach(args) { return result }
-        return tryConnectSocket(args)
-    }
-
-    private static func tryConnectMach(_ args: [String]) -> (Int32, Data, Data)? {
         let connection = NSXPCConnection(machServiceName: ProductIdentity.xpcServiceName)
-        connection.remoteObjectInterface = NSXPCInterface(with: PrimsDesktopXPCProtocol.self)
+        connection.remoteObjectInterface = NSXPCInterface(with: PrimsDesktopXPCBrokerProtocol.self)
         let sem = DispatchSemaphore(value: 0)
         var out: (Int32, Data, Data)?
         var failed = false
@@ -313,7 +293,7 @@ public enum PrimsDesktopXPCClient {
             connection.invalidate()
             return nil
         }
-        guard let proxy = connection.remoteObjectProxy as? PrimsDesktopXPCProtocol else {
+        guard let proxy = connection.remoteObjectProxy as? PrimsDesktopXPCBrokerProtocol else {
             connection.invalidate()
             return nil
         }
@@ -321,7 +301,7 @@ public enum PrimsDesktopXPCClient {
             out = (status, stdout, stderr)
             sem.signal()
         }
-        let deadline = Date().addingTimeInterval(0.8)
+        let deadline = Date().addingTimeInterval(8)
         while Date() < deadline {
             if sem.wait(timeout: .now() + 0.05) == .success { break }
             RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
@@ -334,33 +314,6 @@ public enum PrimsDesktopXPCClient {
         connection.invalidate()
         if failed, out == nil { return nil }
         return out
-    }
-
-    private static func tryConnectSocket(_ args: [String]) -> (Int32, Data, Data)? {
-        let path = ProductIdentity.xpcSocketURL().path
-        guard FileManager.default.fileExists(atPath: path) else { return nil }
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return nil }
-        defer { close(fd) }
-        var addr = sockaddr_un()
-        guard PrimsDesktopXPCHost.fillUnix(&addr, path: path) else { return nil }
-        let rc = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                connect(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
-            }
-        }
-        guard rc == 0 else { return nil }
-        guard let pid = XPCPeerTrust.peerPID(of: fd), XPCPeerTrust.isTrusted(pid: pid) else {
-            return nil
-        }
-        guard let payload = try? JSONEncoder().encode(XPCCommand(args: args)),
-              XPCFrame.write(fd, payload),
-              let replyData = XPCFrame.read(fd),
-              let reply = try? JSONDecoder().decode(XPCReply.self, from: replyData)
-        else {
-            return nil
-        }
-        return (reply.status, Data(reply.stdout.utf8), Data(reply.stderr.utf8))
     }
 
     public static func appIsRunning() -> Bool {

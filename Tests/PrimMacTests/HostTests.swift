@@ -307,7 +307,8 @@ final class HostTests: XCTestCase {
         )
         XCTAssertNotEqual(DesktopCLI.principalURL().path, DesktopCLI.helperURL().path)
         XCTAssertEqual(ProductIdentity.xpcServiceName, "Y6CQ4SWPWM.sh.prims.desktop.xpc")
-        XCTAssertEqual(ProductIdentity.xpcSocketURL().lastPathComponent, "cli.sock")
+        XCTAssertEqual(ProductIdentity.xpcAgentLabel, "sh.prims.desktop.xpc")
+        XCTAssertEqual(ProductIdentity.xpcBrokerFlag, "--xpc-broker")
         XCTAssertEqual(
             ProductIdentity.staleXpcEndpointURL().lastPathComponent,
             "cli.xpc.endpoint"
@@ -516,21 +517,36 @@ final class HostTests: XCTestCase {
         )
         XCTAssertTrue(identity.contains("Y6CQ4SWPWM.sh.prims.desktop.xpc"))
         XCTAssertTrue(xpc.contains("NSXPCListener(machServiceName:"))
+        XCTAssertTrue(xpc.contains("NSXPCConnection(machServiceName:"))
+        XCTAssertTrue(xpc.contains("registerAppEndpoint"))
+        XCTAssertTrue(xpc.contains("SMAppService"))
         XCTAssertTrue(xpc.contains("XPCPeerTrust"))
         XCTAssertTrue(xpc.contains("isTrusted(pid:"))
-        XCTAssertTrue(xpc.contains("kSecCodeInfoTeamIdentifier") || xpc.contains("ProductIdentity.teamID"))
+        XCTAssertTrue(xpc.contains("ProductIdentity.teamID"))
         XCTAssertTrue(xpc.contains("ProductIdentity.bundleIdentifier"))
         XCTAssertFalse(xpc.contains("NSKeyedArchiver"))
         XCTAssertFalse(xpc.contains("NSKeyedUnarchiver"))
         XCTAssertFalse(xpc.contains("archivedData(withRootObject:"))
+        XCTAssertFalse(xpc.contains("sockaddr_un"))
+        XCTAssertFalse(xpc.contains("cli.sock"))
         XCTAssertTrue(xpc.contains("openApplication"))
         XCTAssertFalse(xpc.contains("posix_spawn"))
         let client = try String(
             contentsOf: root.appendingPathComponent("Sources/PrimsDesktopCLI/main.swift"),
             encoding: .utf8
         )
+        XCTAssertTrue(client.contains("xpcBrokerFlag") || client.contains("--xpc-broker"))
         XCTAssertFalse(client.contains("sqlite3_open"))
         XCTAssertFalse(client.contains("ChatDB"))
+        let plist = try String(
+            contentsOf: root.appendingPathComponent("LaunchAgents/sh.prims.desktop.xpc.plist"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(plist.contains("Y6CQ4SWPWM.sh.prims.desktop.xpc"))
+        XCTAssertTrue(plist.contains("MachServices"))
+        XCTAssertTrue(plist.contains("--xpc-broker"))
+        XCTAssertTrue(plist.contains("Contents/Helpers/prims-desktop"))
+        XCTAssertFalse(plist.contains("Contents/MacOS/Prim"))
     }
 
     func testFDAProveIsInAppMessagesNotPipedDoctor() throws {

@@ -116,10 +116,10 @@ already works. A `stop` means checkpoint, not grind.
 The Messages grant is on the **LaunchServices-launched app bundle**
 (`sh.prims.desktop`, TCC `client_type` 0). Shell-exec of
 `Contents/MacOS/Prim` is `client_type` 1 — same Identifier is not enough.
-PATH `prims-desktop` is an XPC client. Named mach service plus codesign
-peer check; do not archive `NSXPCListenerEndpoint`. FDA prove is the
-in-app Messages path (Settings “Connected” / first rows), not piped
-`prims-desktop doctor`.
+PATH `prims-desktop` is an XPC client. Named mach service
+`Y6CQ4SWPWM.sh.prims.desktop.xpc` plus codesign peer check; do not
+archive `NSXPCListenerEndpoint`. FDA prove is the in-app Messages path
+(Settings “Connected” / first rows), not piped `prims-desktop doctor`.
 Do not use `~/Applications/Prims Desktop.app`. Do not leave bak apps in
 `/Applications`. Do not resign Helpers to "fix" FDA. The durable note is
 `scripts/TCC.md`.

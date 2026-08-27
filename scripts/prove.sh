@@ -52,10 +52,21 @@ if "enum DeskDoor" not in desk or "case viewer" not in desk or "case connectors"
 xpc = (root / "Sources/PrimMacCore/PrimsDesktopXPC.swift").read_text()
 if "NSKeyedArchiver" in xpc or "archivedData(withRootObject:" in xpc:
     raise SystemExit("NSXPCListenerEndpoint is not NSKeyedArchiver-encodable")
-if "NSXPCListener(machServiceName:" not in xpc or "XPCPeerTrust" not in xpc:
-    raise SystemExit("XPC must be a named mach service with a codesign peer check")
+if "NSXPCListener(machServiceName:" not in xpc or "NSXPCConnection(machServiceName:" not in xpc:
+    raise SystemExit("XPC must be named mach service + NSXPCConnection")
+if "XPCPeerTrust" not in xpc or "registerAppEndpoint" not in xpc or "SMAppService" not in xpc:
+    raise SystemExit("XPC must codesign-check peers and register the app endpoint over XPC")
+if "sockaddr_un" in xpc or "cli.sock" in xpc:
+    raise SystemExit("do not use a unix-socket stand-in for the named mach service")
 if "sqlite3_open" in client:
     raise SystemExit("PATH client must not open chat.db")
+agent = (root / "LaunchAgents/sh.prims.desktop.xpc.plist").read_text()
+if "Y6CQ4SWPWM.sh.prims.desktop.xpc" not in agent or "MachServices" not in agent:
+    raise SystemExit("LaunchAgent must publish the named mach service")
+if "Contents/MacOS/Prim" in agent:
+    raise SystemExit("LaunchAgent must not exec MacOS/Prim")
+if "LaunchAgents/sh.prims.desktop.xpc.plist" not in (root / "scripts/build.sh").read_text():
+    raise SystemExit("build.sh must ship the XPC LaunchAgent plist")
 install = (root / "scripts/install-cli.sh").read_text()
 if "grep -v" not in install:
     raise SystemExit("install-cli.sh must ignore comments when grepping chat.db")

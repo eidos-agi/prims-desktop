@@ -1083,18 +1083,25 @@ def check_tcc_identity() -> None:
             fail(cid, ident or blob.replace("\n", " ")[:160])
 
     xpc = (ROOT / "Sources" / "PrimMacCore" / "PrimsDesktopXPC.swift").read_text()
+    agent = (ROOT / "LaunchAgents" / "sh.prims.desktop.xpc.plist").read_text() if (ROOT / "LaunchAgents" / "sh.prims.desktop.xpc.plist").is_file() else ""
     if (
         "NSXPCListener(machServiceName:" in xpc
+        and "NSXPCConnection(machServiceName:" in xpc
+        and "registerAppEndpoint" in xpc
+        and "SMAppService" in xpc
         and "XPCPeerTrust" in xpc
         and "NSKeyedArchiver" not in xpc
         and "archivedData(withRootObject:" not in xpc
+        and "sockaddr_un" not in xpc
+        and "MachServices" in agent
+        and "Y6CQ4SWPWM.sh.prims.desktop.xpc" in agent
         and "sqlite3_open" not in client_src
     ):
         ok("xpc_named_service_not_archived_endpoint")
     else:
         fail(
             "xpc_named_service_not_archived_endpoint",
-            "TASK-0015: named mach service + codesign peer check; no NSKeyedArchiver endpoint",
+            "TASK-0015: named mach service + NSXPCConnection + codesign; no file-archive endpoint",
         )
 
     install = (ROOT / "scripts" / "install-cli.sh").read_text()
