@@ -35,10 +35,22 @@ BUNDLE_ID = "sh.prims.desktop"
 PACK_UTI = "com.eidosagi.prim"
 HEALTH = "http://127.0.0.1:7749/health"
 REGISTRY = "http://127.0.0.1:7700"
+PASEO = "prims-connectors-paseo"
+VIEWER_NAMES = {"prim-viewer", "prim-viewer-webmcp"}
+PASEO_SEEDS = {
+    "laptop",
+    "paseo-eidos",
+    "paseo-gmw",
+    "paseo-arp",
+    "paseo-aic",
+    "paseo-reeves",
+    "paseo-prims",
+}
 
 PASSED: list[str] = []
 FAILED: list[tuple[str, str]] = []
 SKIPPED: list[tuple[str, str]] = []
+_PASEO_SOURCE_DONE = False
 
 
 def run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:
@@ -76,6 +88,18 @@ def cli_json(args: list[str]) -> dict:
 def http_json(url: str) -> dict:
     with urllib.request.urlopen(url, timeout=5) as resp:
         return json.loads(resp.read().decode())
+
+
+def is_viewer_name(name: str) -> bool:
+    return name in VIEWER_NAMES or name.startswith("prim-viewer")
+
+
+def desktop_connector_names(names: list[str]) -> list[str]:
+    return [n for n in names if not is_viewer_name(n)]
+
+
+def is_namespaced_service(name: str) -> bool:
+    return name.startswith("prims-desktop.") or name.startswith("prims-connectors-")
 
 
 def scan_files() -> list[Path]:
@@ -210,7 +234,109 @@ def check_identity() -> None:
         fail("cli_name", path or "prims-desktop not on PATH")
 
 
+def check_paseo_source() -> None:
+    global _PASEO_SOURCE_DONE
+    if _PASEO_SOURCE_DONE:
+        return
+    _PASEO_SOURCE_DONE = True
+    src = ROOT / "Sources" / "PrimMacCore" / "Paseo.swift"
+    if src.is_file():
+        text = src.read_text()
+        if f'"{PASEO}"' in text or f'connectorName = "{PASEO}"' in text:
+            ok("paseo_locked_service_name", PASEO)
+        else:
+            fail("paseo_locked_service_name", f"{src} does not lock {PASEO}")
+        missing = [n for n in sorted(PASEO_SEEDS) if f'"{n}"' not in text]
+        if missing:
+            fail("paseo_seed_tenants", f"missing {missing}")
+        else:
+            ok("paseo_seed_tenants", ", ".join(sorted(PASEO_SEEDS)))
+        if "LocalForward" in text and "~/.ssh/config" in text and "Never writes" not in text:
+            fail("paseo_does_not_write_ssh_config", "looks like it writes LocalForward")
+        else:
+            ok("paseo_does_not_write_ssh_config")
+    else:
+        fail("paseo_locked_service_name", "Sources/PrimMacCore/Paseo.swift missing")
+
+    yaml = ROOT / "asmp.yaml"
+    text = yaml.read_text() if yaml.is_file() else ""
+    if f"connector.{PASEO}" in text:
+        ok("asmp_yaml_has_paseo")
+    else:
+        fail("asmp_yaml_has_paseo", "asmp.yaml missing connector.prims-connectors-paseo")
+    if "connector.prim-viewer" in text:
+        fail("asmp_yaml_skips_viewer", "asmp.yaml still advertises viewer as a Desktop connector")
+    else:
+        ok("asmp_yaml_skips_viewer")
+
+    prove = (ROOT / "scripts" / "prove.sh").read_text()
+    if re.search(r"prims-desktop\s+send\b", prove) or "send --no-wait" in prove:
+        fail("prove_does_not_fire_send", "prove.sh must not smoke-test send")
+    else:
+        ok("prove_does_not_fire_send")
+
+
+def check_paseo_cli(names: list[str] | None = None) -> None:
+    if names is None:
+        try:
+            names = desktop_connector_names(
+                [r["name"] for r in cli_json(["connectors"]).get("connectors") or []]
+            )
+        except Exception as e:
+            fail("cli_lists_paseo", str(e))
+            return
+    paseo_names = [n for n in names if "paseo" in n]
+    if PASEO in names and paseo_names == [PASEO]:
+        ok("cli_lists_paseo", PASEO)
+    elif PASEO in names:
+        fail("cli_lists_paseo", f"more than one paseo connector: {paseo_names}")
+    else:
+        fail("cli_lists_paseo", f"missing {PASEO} in {names}")
+
+    try:
+        cells = cli_json(["cells"])
+    except Exception as e:
+        fail("cli_cells_lists_registry", str(e))
+        return
+    rows = cells.get("cells") or []
+    ids = {r.get("id") or r.get("name") for r in rows}
+    if PASEO_SEEDS <= ids and cells.get("connector") == PASEO:
+        ok("cli_cells_lists_registry", f"{len(ids)} cells")
+    else:
+        fail("cli_cells_lists_registry", f"ids={sorted(ids)} connector={cells.get('connector')}")
+
+    got = run(["asmp", "--json", "get", PASEO])
+    if got.returncode != 0:
+        fail("asmp_announces_paseo", (got.stderr or got.stdout)[:200])
+        return
+    raw = got.stdout
+    if "7749" in raw:
+        fail("paseo_asmp_not_fake_http", raw[:200])
+    else:
+        ok("paseo_asmp_not_fake_http")
+    try:
+        manifest = json.loads(raw)
+    except json.JSONDecodeError:
+        manifest = {}
+    if manifest.get("parent") == "prims-desktop" and manifest.get("name") == PASEO:
+        ok("asmp_announces_paseo")
+    else:
+        fail("asmp_announces_paseo", raw[:200])
+
+    send = run(["prims-desktop", "--json", "send", "paseo-gmw", "102adae1-a260-47dc-b8b1-087cfed7aff3", "nope"])
+    try:
+        body = json.loads(send.stdout or "{}")
+    except json.JSONDecodeError:
+        body = {}
+    if send.returncode != 0 and "no-wait" in (body.get("error") or send.stderr or send.stdout):
+        ok("send_requires_no_wait")
+    else:
+        fail("send_requires_no_wait", f"exit={send.returncode} {send.stdout[:160]}")
+
+
 def check_asked() -> None:
+    check_paseo_source()
+    check_paseo_cli()
     help_txt = run(["prims-desktop"]).stdout
     if re.search(r"^\s+prims-desktop asmp\s*$", help_txt, re.M):
         ok("cli_has_asmp_verb")
@@ -235,10 +361,15 @@ def check_asked() -> None:
 
     try:
         connectors = cli_json(["connectors"]).get("connectors") or []
-        names = [r["name"] for r in connectors]
+        raw_names = [r["name"] for r in connectors]
+        names = desktop_connector_names(raw_names)
     except Exception as e:
         fail("cli_lists_connectors", str(e))
         return
+    if any(is_viewer_name(n) for n in raw_names):
+        fail("viewer_is_not_desktop_connector", ", ".join(raw_names))
+    else:
+        ok("viewer_is_not_desktop_connector")
     if names:
         ok("cli_lists_connectors", ", ".join(names))
     else:
@@ -246,6 +377,10 @@ def check_asked() -> None:
         return
 
     announced = set(announce.get("announced") or [])
+    if any(is_viewer_name(n) for n in announced if n != "prims-desktop"):
+        fail("asmp_does_not_announce_viewer", ", ".join(sorted(announced)))
+    else:
+        ok("asmp_does_not_announce_viewer")
     missing = [n for n in names if n not in announced]
     if missing:
         fail("asmp_announces_each_connector", f"not announced: {missing}")
@@ -274,6 +409,8 @@ def check_asked() -> None:
     else:
         bad = []
         for n in ["prims-desktop", *names]:
+            if n == PASEO:
+                continue
             line = next((ln for ln in eamd.stdout.splitlines() if re.search(rf"\b{re.escape(n)}\b", ln)), "")
             if "active" not in line or "health healthy" not in line:
                 bad.append(n)
@@ -320,12 +457,11 @@ def check_naming() -> None:
         fail("connector_services_namespaced", f"cannot list connectors: {e}")
         names = []
 
+    names = desktop_connector_names(names)
     bare = []
     for n in names:
-        # Pro ASMP: child services are namespaced to the host. Bare tool
-        # names collide with leftover airport services (messages-imessage).
-        if n and not n.startswith("prims-desktop."):
-            # announced name is the service name today
+        # Locked family is prims-connectors-*. Bare tool names still collide.
+        if n and not is_namespaced_service(n):
             got = run(["asmp", "get", n])
             if got.returncode == 0:
                 bare.append(n)
@@ -346,6 +482,13 @@ def check_naming() -> None:
         raw = got.stdout
         if "127.0.0.1:7749" in raw or "7749" in raw:
             lying.append(n)
+    if PASEO in lying:
+        fail(
+            "paseo_health_is_not_host_probe",
+            f"{PASEO} claims {HEALTH} — status.ok is tenant reach, not the host loopback",
+        )
+    elif PASEO in names or (ROOT / "Sources" / "PrimMacCore" / "Paseo.swift").is_file():
+        ok("paseo_health_is_not_host_probe")
     if names and lying:
         fail(
             "connector_health_is_not_host_probe",
@@ -414,6 +557,9 @@ def check_naming() -> None:
         fail("operational_leftover_names", " | ".join(leftover_hits[:6]))
     else:
         ok("operational_leftover_names")
+
+    # --naming only still has to know the locked service. Full runs already did.
+    check_paseo_source()
 
     # Product-facing docs still calling the ship Prim.app.
     product_docs = [ROOT / "ACCEPTANCE.md", ROOT / "GREAT.md", ROOT / "CHARTER.md"]
@@ -511,8 +657,13 @@ def check_deep() -> None:
     """Honesty, drift, TCC, schema, sign. The checks that catch a pretty lie."""
     try:
         connectors = cli_json(["connectors"]).get("connectors") or []
-        names = [r["name"] for r in connectors]
+        raw_names = [r["name"] for r in connectors]
+        names = desktop_connector_names(raw_names)
         by_name = {r["name"]: r for r in connectors}
+        if any(is_viewer_name(n) for n in raw_names):
+            fail("viewer_is_not_desktop_connector_deep", ", ".join(raw_names))
+        else:
+            ok("viewer_is_not_desktop_connector_deep")
     except Exception as e:
         fail("connector_json_schema", str(e))
         connectors, names, by_name = [], [], {}
@@ -557,7 +708,15 @@ def check_deep() -> None:
     # A connector is not operable just because ASMP pinged the host health port.
     liars = []
     for s in statuses:
-        operable = bool(s.get("in_host")) or bool(s.get("bin_exists")) or bool(s.get("chat_db_readable"))
+        operable = (
+            bool(s.get("in_host"))
+            or bool(s.get("bin_exists"))
+            or bool(s.get("chat_db_readable"))
+            or bool(s.get("reached"))
+        )
+        if s.get("name") == PASEO and s.get("ok") and not s.get("reached"):
+            liars.append(s.get("name"))
+            continue
         if s.get("ok") and not operable:
             liars.append(s.get("name"))
     if liars:
@@ -608,6 +767,14 @@ def check_deep() -> None:
             fail("overlay_kinds_are_connector", f"{kind_bad or type_mint}")
         else:
             ok("overlay_kinds_are_connector")
+        tenant_rows = overlay.get("paseo_tenants") or []
+        tenant_ids = {r.get("id") or r.get("name") for r in tenant_rows}
+        if PASEO_SEEDS <= tenant_ids:
+            ok("overlay_paseo_tenants", ", ".join(sorted(tenant_ids)))
+        elif PASEO in names:
+            fail("overlay_paseo_tenants", f"overlay tenants={sorted(tenant_ids)}")
+        else:
+            skip("overlay_paseo_tenants", "connector not in live catalog yet")
     else:
         fail("overlay_tools_in_catalog", f"missing {overlay_path}")
 

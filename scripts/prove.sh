@@ -15,6 +15,7 @@ python3 "$ROOT/scripts/litmus.py"
 prims-desktop asmp
 prims-desktop doctor
 prims-desktop connectors
+prims-desktop --json cells
 prims-desktop status imessage-chatdb-receive || true
 
 ASMP_BIN="$(command -v asmp || true)"
@@ -32,7 +33,7 @@ while read -r name; do
 done < <(prims-desktop --json connectors | python3 -c 'import json,sys; [print(r["name"]) for r in json.load(sys.stdin)["connectors"]]')
 
 if command -v eamd >/dev/null 2>&1; then
-  eamd asmp | grep -E 'prims-desktop|imessage-chatdb|opff-dally|docket-webmcp|prim-viewer'
+  eamd asmp | grep -E 'prims-desktop|imessage-chatdb|opff-dally|docket-webmcp|prims-connectors-paseo'
 fi
 
 if [[ -d ../prim-sim ]]; then
@@ -48,7 +49,14 @@ if [[ -d ../prim-sim ]]; then
     --filter HostTests.testASMPConnectorManifestIsAServiceNotAPackType \
     --filter HostTests.testProductIdentityIsLocked \
     --filter HostTests.testInfoPlistAndPPPCAreBound \
-    --filter HostTests.testSourcesDoNotAskFDAForLooseCLI
+    --filter HostTests.testSourcesDoNotAskFDAForLooseCLI \
+    --filter HostTests.testViewerIsSurfaceNotDesktopConnector \
+    --filter HostTests.testPaseoRegistrySeedsSevenCellsAndOneConnector \
+    --filter HostTests.testPaseoCellsAddIsARowNotAConnector \
+    --filter HostTests.testPaseoV1VerbsAreStructuralAndSendNeedsNoWait \
+    --filter HostTests.testPaseoASMPManifestIsNotHostHealth \
+    --filter HostTests.testPaseoStatusDoesNotLieWhenDark \
+    --filter HostTests.testConfigSetPreservesPaseoTenants
 else
   echo "skip swift test (../prim-sim missing)"
 fi

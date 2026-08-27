@@ -12,12 +12,16 @@ public enum HostUI: Sendable {
         tools.filter { $0.as == "host" }
     }
 
+    public static func isViewer(_ tool: PrimTool) -> Bool {
+        tool.name == "prim-viewer" || tool.name == "prim-viewer-webmcp" || tool.name.hasPrefix("prim-viewer")
+    }
+
     public static func surfaces(_ tools: [PrimTool]) -> [PrimTool] {
-        listed(tools).filter { $0.kind == "surface" }
+        listed(tools).filter { $0.kind == "surface" || isViewer($0) }
     }
 
     public static func connectors(_ tools: [PrimTool]) -> [PrimTool] {
-        listed(tools).filter { $0.kind == "connector" }
+        listed(tools).filter { $0.kind == "connector" && !isViewer($0) }
     }
 
     /// Rail order: the in-host iMessage account first, then the rest by name.

@@ -32,7 +32,7 @@ endpoints:
     host: local
     visibility: local
     command: prims-desktop
-    note: connectors / status / receive / doctor / open / asmp
+            note: connectors / status / receive / cells / doctor / open / asmp
 
 health:
   method: http
@@ -47,7 +47,7 @@ capabilities:
     - connector.docket-webmcp
     - connector.imessage-chatdb-receive
     - connector.opff-dally-receive
-    - connector.prim-viewer-webmcp
+    - connector.prims-connectors-paseo
   requires:
     - prim
     - asmp.registry

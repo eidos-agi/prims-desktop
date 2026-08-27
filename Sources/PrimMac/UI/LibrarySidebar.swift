@@ -87,7 +87,9 @@ struct LibrarySidebar: View {
         let citesHere = HostUI.cites(tool, kind: currentKind)
         return row(
             title: tool.name,
-            sub: HostUI.isInHost(tool) ? "iMessage · chat.db" : tool.role,
+            sub: HostUI.isInHost(tool)
+                ? "iMessage · chat.db"
+                : (Paseo.isPaseo(tool) ? "Paseo · tenant catalog" : tool.role),
             on: tool.name == currentTool,
             dim: !citesHere
         ) { onTool(tool) }

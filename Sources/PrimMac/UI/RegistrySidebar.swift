@@ -77,7 +77,7 @@ struct RegistrySidebar: View {
         let citesHere = HostUI.cites(tool, kind: currentKind)
         return row(
             title: tool.name,
-            sub: tool.role,
+            sub: Paseo.isPaseo(tool) ? "Paseo · tenant catalog" : tool.role,
             on: tool.name == currentTool,
             dim: !citesHere
         ) { onTool(tool) }

@@ -58,7 +58,7 @@ public enum ASMP {
             host: local
             visibility: local
             command: prims-desktop
-            note: connectors / status / receive / doctor / open / asmp
+            note: connectors / status / receive / cells / doctor / open / asmp
 
         health:
           method: http
@@ -158,7 +158,10 @@ public enum ASMP {
     }
 
     public static func connectorManifest(_ tool: PrimTool) -> [String: Any] {
-        [
+        if Paseo.isPaseo(tool) {
+            return paseoManifest(tool)
+        }
+        return [
             "asmp": "0.1",
             "kind": "service",
             "name": tool.name,
@@ -186,6 +189,42 @@ public enum ASMP {
             "infra": [
                 "repo": "~/repos-eidos-agi/prims-desktop",
                 "host_service": "prims-desktop",
+            ],
+        ]
+    }
+
+    /// Honest announce: CLI operate, not the host :7749 costume.
+    public static func paseoManifest(_ tool: PrimTool) -> [String: Any] {
+        [
+            "asmp": "0.1",
+            "kind": "service",
+            "name": Paseo.connectorName,
+            "description": "Paseo tenant catalog hosted by prims-desktop. One connector; cells are overlay rows.",
+            "version": "0.1.0",
+            "created_by": "agent://primdesktop",
+            "owner": "eidos-agi",
+            "section": "tools",
+            "parent": "prims-desktop",
+            "endpoints": [[
+                "protocol": "cli",
+                "host": "local",
+                "visibility": "local",
+                "command": "prims-desktop",
+                "note": "cells / health / ls / inspect / logs / send --no-wait",
+            ]],
+            "health": [
+                "method": "cli",
+                "target": "prims-desktop status \(Paseo.connectorName)",
+            ],
+            "capabilities": [
+                "provides": [capability(for: tool)],
+                "anti_routes": ["prim." + "connector", "prim." + "surface"],
+            ],
+            "infra": [
+                "repo": "~/repos-eidos-agi/prims-desktop",
+                "host_service": "prims-desktop",
+                "overlay": "~/.prim/registry.local.json",
+                "tenants_key": Paseo.overlayKey,
             ],
         ]
     }

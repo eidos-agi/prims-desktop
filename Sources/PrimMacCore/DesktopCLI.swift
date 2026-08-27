@@ -20,9 +20,17 @@ public enum DesktopCLI {
       prims-desktop asmp
       prims-desktop config get [<name>]
       prims-desktop config set <name> <field> <value>
+      prims-desktop cells
+      prims-desktop cells add <id> --host H --port N --reach local|ssh [--ssh hop] [--notes text]
+      prims-desktop health <tenant>
+      prims-desktop ls <tenant>
+      prims-desktop inspect <tenant> <id>
+      prims-desktop logs <tenant> [<id>]
+      prims-desktop send <tenant> <id> --no-wait <text>
 
     --json anywhere. Overlay is ~/.prim/registry.local.json (not a second store).
-    ASMP health is http://127.0.0.1:7749/health.
+    Paseo tenants live in that overlay under paseo_tenants — one connector, more rows.
+    ASMP health is http://127.0.0.1:7749/health (host only; not prims-connectors-paseo).
     """
 
     public static let fdaNote = ProductIdentity.fdaNote
@@ -50,6 +58,11 @@ public enum DesktopCLI {
             case "connectors":
                 return try cmdConnectors(json: parsed.json)
             case "status":
+                if parsed.positionals.first == Paseo.connectorName {
+                    let report = paseoStatus()
+                    if parsed.json { return emitJSON(report.json, status: report.ok ? 0 : 2) }
+                    return Result(status: report.ok ? 0 : 2, stdout: report.human + "\n", stderr: "")
+                }
                 return try cmdStatus(name: parsed.positionals.first, json: parsed.json)
             case "receive":
                 return try cmdReceive(name: parsed.positionals.first, limit: parsed.limit, json: parsed.json)
@@ -61,6 +74,12 @@ public enum DesktopCLI {
                 return try cmdAsmp(parsed.positionals, json: parsed.json)
             case "config":
                 return try cmdConfig(parsed.positionals, json: parsed.json)
+            case "cells":
+                return try cmdCells(parsed, json: parsed.json)
+            case "health", "ls", "inspect", "logs", "send":
+                return try cmdPaseo(parsed)
+            case "run", "clone", "delete", "archive", "permit", "daemon", "recreate":
+                return fail(1, "\(parsed.command) is out of v1 for \(Paseo.connectorName)", json: parsed.json)
             default:
                 return fail(1, "unknown command \(parsed.command)", json: parsed.json)
             }
@@ -356,7 +375,137 @@ public enum DesktopCLI {
         var human: String
     }
 
+    private static func cmdCells(_ parsed: Parsed, json: Bool) throws -> Result {
+        if parsed.positionals.first == "add" {
+            return try cmdCellsAdd(parsed, json: json)
+        }
+        let tenants = try Paseo.ensureSeeded()
+        if json {
+            return okJSON([
+                "ok": true,
+                "connector": Paseo.connectorName,
+                "path": LocalOverlay.url().path,
+                "cells": tenants.map { $0.json() },
+            ])
+        }
+        if tenants.isEmpty {
+            return Result(status: 0, stdout: "\(Paseo.connectorName)  no cells\n", stderr: "")
+        }
+        var lines = ["\(Paseo.connectorName)  \(tenants.count) cells"]
+        lines.append(contentsOf: tenants.map { "  \($0.human())" })
+        return Result(status: 0, stdout: lines.joined(separator: "\n") + "\n", stderr: "")
+    }
+
+    private static func cmdCellsAdd(_ parsed: Parsed, json: Bool) throws -> Result {
+        let rest = Array(parsed.positionals.dropFirst())
+        guard let id = rest.first, !id.isEmpty else {
+            return fail(1, "cells add needs <id> --host --port --reach", json: json)
+        }
+        guard let host = parsed.flags["host"], !host.isEmpty else {
+            return fail(1, "cells add needs --host", json: json)
+        }
+        guard let portText = parsed.flags["port"], let port = Int(portText), port > 0 else {
+            return fail(1, "cells add needs --port", json: json)
+        }
+        guard let reachText = parsed.flags["reach"], let reach = Paseo.Reach(rawValue: reachText) else {
+            return fail(1, "cells add needs --reach local|ssh", json: json)
+        }
+        let tenant = Paseo.Tenant(
+            id: id,
+            host: host,
+            port: port,
+            reach: reach,
+            ssh: parsed.flags["ssh"] ?? (reach == .ssh ? "hostkey" : ""),
+            notes: parsed.flags["notes"] ?? ""
+        )
+        let tenants = try Paseo.addTenant(tenant)
+        if json {
+            return okJSON([
+                "ok": true,
+                "connector": Paseo.connectorName,
+                "added": tenant.json(),
+                "cells": tenants.map { $0.json() },
+            ])
+        }
+        return Result(status: 0, stdout: "added \(tenant.human())\n", stderr: "")
+    }
+
+    private static func cmdPaseo(_ parsed: Parsed) throws -> Result {
+        if parsed.follow {
+            return fail(1, "logs is read-only; --follow is out of v1", json: parsed.json)
+        }
+        let verb = parsed.command
+        guard let tenantID = parsed.positionals.first else {
+            return fail(1, "\(verb) needs a tenant from the paseo registry", json: parsed.json)
+        }
+        if verb == "send" && !parsed.noWait {
+            return fail(1, "send requires --no-wait", json: parsed.json)
+        }
+        let tenant: Paseo.Tenant
+        do {
+            tenant = try Paseo.tenant(named: tenantID)
+        } catch {
+            return fail(1, error.localizedDescription, json: parsed.json)
+        }
+        var extras: [String] = []
+        if verb == "send" {
+            extras.append("--no-wait")
+            extras.append(contentsOf: Array(parsed.positionals.dropFirst()))
+        } else {
+            extras.append(contentsOf: Array(parsed.positionals.dropFirst()))
+        }
+        let result: Paseo.ExecResult
+        do {
+            result = try Paseo.operate(tenant: tenant, verb: verb, extras: extras)
+        } catch {
+            return fail(resultStatus(for: error), error.localizedDescription, json: parsed.json)
+        }
+        return emitPaseo(result, tenant: tenant, verb: verb, json: parsed.json)
+    }
+
+    private static func resultStatus(for error: Error) -> Int32 {
+        let text = error.localizedDescription
+        if text.contains("down") || text.contains("not on PATH") { return 2 }
+        return 1
+    }
+
+    private static func emitPaseo(_ result: Paseo.ExecResult, tenant: Paseo.Tenant, verb: String, json: Bool) -> Result {
+        var payload: [String: Any] = [
+            "ok": result.status == 0,
+            "connector": Paseo.connectorName,
+            "tenant": tenant.id,
+            "verb": verb,
+            "host": result.host,
+            "tunneled": result.tunneled,
+            "argv": result.argv,
+            "status": Int(result.status),
+        ]
+        if let data = result.stdout.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) {
+            payload["result"] = obj
+        } else if !result.stdout.isEmpty {
+            payload["result"] = result.stdout
+        }
+        if !result.stderr.isEmpty { payload["stderr"] = result.stderr }
+        if result.status != 0 {
+            payload["dark"] = true
+            payload["error"] = result.stderr.isEmpty ? "paseo \(verb) exited \(result.status)" : result.stderr
+        }
+        if json {
+            return emitJSON(payload, status: result.status == 0 ? 0 : 2)
+        }
+        if result.status != 0 {
+            let err = result.stderr.isEmpty ? result.stdout : result.stderr
+            return Result(status: 2, stdout: "", stderr: "prims-desktop: \(tenant.id) \(err.isEmpty ? "dark" : err)\n")
+        }
+        let body = result.stdout.isEmpty ? "\(verb) \(tenant.id) ok\n" : result.stdout
+        return Result(status: 0, stdout: body.hasSuffix("\n") ? body : body + "\n", stderr: "")
+    }
+
     private static func status(for tool: PrimTool) -> StatusReport {
+        if Paseo.isPaseo(tool) {
+            return paseoStatus()
+        }
         if HostUI.isInHost(tool) {
             let readable = ChatDB.health()
             let note = readable ? "chat.db readable" : "chat.db locked (FDA)"
@@ -417,20 +566,61 @@ public enum DesktopCLI {
 
     // MARK: - parse / emit
 
+    private static func paseoStatus() -> StatusReport {
+        let tenants = (try? Paseo.ensureSeeded()) ?? []
+        let health = (try? Paseo.healthAll()) ?? (false, [])
+        let reached = health.1.filter(\.ok).map(\.tenant.id)
+        let dark = health.1.filter(\.dark).map(\.tenant.id)
+        let bin = Paseo.whichPaseo()
+        let ok = health.0
+        var json: [String: Any] = [
+            "name": Paseo.connectorName,
+            "ok": ok,
+            "in_host": false,
+            "bin": bin?.path ?? "paseo",
+            "bin_exists": bin != nil,
+            "reached": ok,
+            "tenants_ok": reached,
+            "tenants_dark": dark,
+            "tenants": health.1.map { row -> [String: Any] in
+                var obj = row.tenant.json()
+                obj["ok"] = row.ok
+                obj["dark"] = row.dark
+                obj["note"] = row.note
+                return obj
+            },
+            "note": ok
+                ? "reachable \(reached.joined(separator: ", "))"
+                : (dark.isEmpty ? "no tenants" : "dark \(dark.joined(separator: ", "))"),
+        ]
+        if !ok { json["error"] = json["note"] as Any }
+        return StatusReport(
+            ok: ok,
+            json: json,
+            human: "\(Paseo.connectorName)  \(json["note"] as? String ?? "")"
+        )
+    }
+
     private struct Parsed {
         var json: Bool
         var help: Bool
         var limit: Int
+        var noWait: Bool
+        var follow: Bool
         var command: String
         var positionals: [String]
+        var flags: [String: String]
     }
 
     private static func parse(_ args: [String]) throws -> Parsed {
         var json = false
         var help = false
         var limit = 8
+        var noWait = false
+        var follow = false
         var command = ""
         var positionals: [String] = []
+        var flags: [String: String] = [:]
         var i = 0
         while i < args.count {
             let arg = args[i]
@@ -444,12 +634,29 @@ public enum DesktopCLI {
                 i += 1
                 continue
             }
-            if arg == "--limit" {
+            if arg == "--no-wait" {
+                noWait = true
                 i += 1
-                guard i < args.count, let n = Int(args[i]), n > 0 else {
-                    throw LocalOverlay.OverlayError("--limit needs a positive integer")
+                continue
+            }
+            if arg == "--follow" {
+                follow = true
+                i += 1
+                continue
+            }
+            if arg == "--limit" || arg == "--host" || arg == "--port" || arg == "--reach" || arg == "--ssh" || arg == "--notes" {
+                i += 1
+                guard i < args.count else {
+                    throw LocalOverlay.OverlayError("\(arg) needs a value")
                 }
-                limit = n
+                let key = String(arg.dropFirst(2))
+                flags[key] = args[i]
+                if arg == "--limit" {
+                    guard let n = Int(args[i]), n > 0 else {
+                        throw LocalOverlay.OverlayError("--limit needs a positive integer")
+                    }
+                    limit = n
+                }
                 i += 1
                 continue
             }
@@ -463,7 +670,16 @@ public enum DesktopCLI {
             }
             i += 1
         }
-        return Parsed(json: json, help: help, limit: limit, command: command, positionals: positionals)
+        return Parsed(
+            json: json,
+            help: help,
+            limit: limit,
+            noWait: noWait,
+            follow: follow,
+            command: command,
+            positionals: positionals,
+            flags: flags
+        )
     }
 
     private static func clip(_ text: String, _ n: Int) -> String {
