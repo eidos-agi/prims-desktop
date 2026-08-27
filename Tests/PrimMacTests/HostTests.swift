@@ -306,8 +306,10 @@ final class HostTests: XCTestCase {
             "/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"
         )
         XCTAssertNotEqual(DesktopCLI.principalURL().path, DesktopCLI.helperURL().path)
+        XCTAssertEqual(ProductIdentity.xpcServiceName, "Y6CQ4SWPWM.sh.prims.desktop.xpc")
+        XCTAssertEqual(ProductIdentity.xpcSocketURL().lastPathComponent, "cli.sock")
         XCTAssertEqual(
-            ProductIdentity.xpcEndpointURL().lastPathComponent,
+            ProductIdentity.staleXpcEndpointURL().lastPathComponent,
             "cli.xpc.endpoint"
         )
         XCTAssertFalse(ProcessEntry.isLaunchServicesAppProcess())
@@ -466,6 +468,7 @@ final class HostTests: XCTestCase {
         XCTAssertFalse(install.contains("codesign"))
         XCTAssertTrue(install.contains("Contents/Helpers/prims-desktop"))
         XCTAssertTrue(install.contains("must not exec Contents/MacOS/Prim"))
+        XCTAssertTrue(install.contains("grep -v"), "comments mentioning chat.db must not fail install")
         let client = try String(
             contentsOf: root.appendingPathComponent("Sources/PrimsDesktopCLI/main.swift"),
             encoding: .utf8
@@ -485,6 +488,49 @@ final class HostTests: XCTestCase {
         XCTAssertTrue(tcc.contains("XPC"))
         XCTAssertTrue(tcc.contains("client_type"))
         XCTAssertTrue(tcc.contains("in-app Messages"))
+        let xpc = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/PrimsDesktopXPC.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(xpc.contains("NSKeyedArchiver"))
+        XCTAssertFalse(xpc.contains("archivedData(withRootObject:"))
+        XCTAssertTrue(xpc.contains("NSXPCListener(machServiceName:"))
+        XCTAssertTrue(xpc.contains("XPCPeerTrust"))
+        XCTAssertTrue(xpc.contains("ProductIdentity.teamID"))
+        XCTAssertTrue(xpc.contains("openApplication"))
+        XCTAssertFalse(xpc.contains("Contents/MacOS/Prim\""))
+    }
+
+    func testXPCRendezvousIsNamedServiceNotArchivedEndpoint() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let xpc = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/PrimsDesktopXPC.swift"),
+            encoding: .utf8
+        )
+        let identity = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/ProductIdentity.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(identity.contains("Y6CQ4SWPWM.sh.prims.desktop.xpc"))
+        XCTAssertTrue(xpc.contains("NSXPCListener(machServiceName:"))
+        XCTAssertTrue(xpc.contains("XPCPeerTrust"))
+        XCTAssertTrue(xpc.contains("isTrusted(pid:"))
+        XCTAssertTrue(xpc.contains("kSecCodeInfoTeamIdentifier") || xpc.contains("ProductIdentity.teamID"))
+        XCTAssertTrue(xpc.contains("ProductIdentity.bundleIdentifier"))
+        XCTAssertFalse(xpc.contains("NSKeyedArchiver"))
+        XCTAssertFalse(xpc.contains("NSKeyedUnarchiver"))
+        XCTAssertFalse(xpc.contains("archivedData(withRootObject:"))
+        XCTAssertTrue(xpc.contains("openApplication"))
+        XCTAssertFalse(xpc.contains("posix_spawn"))
+        let client = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimsDesktopCLI/main.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(client.contains("sqlite3_open"))
+        XCTAssertFalse(client.contains("ChatDB"))
     }
 
     func testFDAProveIsInAppMessagesNotPipedDoctor() throws {

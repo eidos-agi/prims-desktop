@@ -27,6 +27,13 @@ That helper may LaunchServices-open the bundle or talk XPC. It must not
 `sqlite3_open` `chat.db`. Do not exec `Contents/MacOS/Prim` from PATH and
 expect FDA.
 
+XPC rendezvous is the named mach service
+`Y6CQ4SWPWM.sh.prims.desktop.xpc` plus a unix socket. Both sides verify
+the peer (Team `Y6CQ4SWPWM`, Identifier `sh.prims.desktop`). Do not write
+`NSXPCListenerEndpoint` with `NSKeyedArchiver` (NSCocoaErrorDomain 4866).
+If the app is not running, LS-open the bundle. TASK-0015 is this
+rendezvous, not the FDA prove.
+
 **FDA prove is the in-app Messages path** (Settings “Connected” / Connectors
 stage first rows) in the running `Prims Desktop.app`. The app process opens
 `chat.db` itself (`DeskModel` / `StageView` / `DeskSettings`). Do not wait

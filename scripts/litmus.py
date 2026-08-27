@@ -1082,6 +1082,27 @@ def check_tcc_identity() -> None:
         else:
             fail(cid, ident or blob.replace("\n", " ")[:160])
 
+    xpc = (ROOT / "Sources" / "PrimMacCore" / "PrimsDesktopXPC.swift").read_text()
+    if (
+        "NSXPCListener(machServiceName:" in xpc
+        and "XPCPeerTrust" in xpc
+        and "NSKeyedArchiver" not in xpc
+        and "archivedData(withRootObject:" not in xpc
+        and "sqlite3_open" not in client_src
+    ):
+        ok("xpc_named_service_not_archived_endpoint")
+    else:
+        fail(
+            "xpc_named_service_not_archived_endpoint",
+            "TASK-0015: named mach service + codesign peer check; no NSKeyedArchiver endpoint",
+        )
+
+    install = (ROOT / "scripts" / "install-cli.sh").read_text()
+    if "grep -v" in install and "chat\\.db" in install:
+        ok("install_cli_ignores_chatdb_comments")
+    else:
+        fail("install_cli_ignores_chatdb_comments", "install-cli.sh must not fail on comments that mention chat.db")
+
     # FDA prove is the in-app Messages stage (Connected / first rows), not
     # piped `prims-desktop doctor --json` chat_db_readable. Independent of XPC.
     stage = (ROOT / "Sources" / "PrimMac" / "UI" / "StageView.swift").read_text()

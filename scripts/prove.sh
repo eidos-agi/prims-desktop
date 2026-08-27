@@ -49,6 +49,16 @@ if "PrimsDesktopXPC" in desk:
     raise SystemExit("TASK-0014 must not block Messages rows on XPC")
 if "enum DeskDoor" not in desk or "case viewer" not in desk or "case connectors" not in desk or "case chat" not in desk:
     raise SystemExit("three doors must be Viewer, Connectors, Chat")
+xpc = (root / "Sources/PrimMacCore/PrimsDesktopXPC.swift").read_text()
+if "NSKeyedArchiver" in xpc or "archivedData(withRootObject:" in xpc:
+    raise SystemExit("NSXPCListenerEndpoint is not NSKeyedArchiver-encodable")
+if "NSXPCListener(machServiceName:" not in xpc or "XPCPeerTrust" not in xpc:
+    raise SystemExit("XPC must be a named mach service with a codesign peer check")
+if "sqlite3_open" in client:
+    raise SystemExit("PATH client must not open chat.db")
+install = (root / "scripts/install-cli.sh").read_text()
+if "grep -v" not in install:
+    raise SystemExit("install-cli.sh must ignore comments when grepping chat.db")
 build = (root / "scripts/build.sh").read_text().replace("\\\n", " ")
 if ".app.bak" in build:
     raise SystemExit("build.sh still mints bak apps")
@@ -115,7 +125,8 @@ if [[ -d ../prim-sim ]]; then
     --filter HostTests.testBuildScriptDoesNotDeepStompIdentifiers \
     --filter HostTests.testTrampolineAndInstallCLIExecAppExecutable \
     --filter HostTests.testFDAProveIsInAppMessagesNotPipedDoctor \
-    --filter HostTests.testThreeDoorsAreViewerConnectorsChat
+    --filter HostTests.testThreeDoorsAreViewerConnectorsChat \
+    --filter HostTests.testXPCRendezvousIsNamedServiceNotArchivedEndpoint
 else
   echo "skip swift test (../prim-sim missing)"
 fi

@@ -46,8 +46,18 @@ public enum ProductIdentity {
             .appendingPathComponent("Library/Application Support/Prims Desktop")
     }
 
-    /// NSXPCListenerEndpoint rendezvous. 0600. Written by the LS-launched app.
-    public static func xpcEndpointURL() -> URL {
+    /// Named mach service the LS-launched app publishes (1Password-style).
+    /// Team-prefixed so the peer check matches Developer ID Y6CQ4SWPWM.
+    public static let xpcServiceName = "Y6CQ4SWPWM.sh.prims.desktop.xpc"
+
+    /// Unix-domain rendezvous for the named service. Not an archived endpoint.
+    /// NSXPCListenerEndpoint cannot be NSKeyedArchiver-encoded (NSCocoaErrorDomain 4866).
+    public static func xpcSocketURL() -> URL {
+        supportDirectory().appendingPathComponent("cli.sock")
+    }
+
+    /// Leftover invalid archive from 7c0a11a. Never write this.
+    public static func staleXpcEndpointURL() -> URL {
         supportDirectory().appendingPathComponent("cli.xpc.endpoint")
     }
 }

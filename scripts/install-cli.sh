@@ -27,7 +27,8 @@ cp "$TRAMPOLINE" "$DEST/prims-desktop"
 chmod 755 "$DEST/prims-desktop"
 ln -sfn prims-desktop "$DEST/prim-desktop"
 
-if grep -q 'ChatDB\|chat\.db\|sqlite3_open' "$DEST/prims-desktop"; then
+# Comments may mention chat.db. Only live lines are the gate.
+if grep -v '^[[:space:]]*#' "$DEST/prims-desktop" | grep -q 'ChatDB\|chat\.db\|sqlite3_open'; then
   echo "FATAL: trampoline must not contain ChatDB read code" >&2
   exit 1
 fi
