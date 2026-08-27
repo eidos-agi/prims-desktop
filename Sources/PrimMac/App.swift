@@ -1,4 +1,5 @@
 import AppKit
+import PrimMacCore
 import SwiftUI
 
 /// Human glass only. Process entry is `PrimDesktopMain`. Do not mark this
@@ -41,8 +42,7 @@ struct PrimApp: App {
     }
 }
 
-/// GUI-only. Unreachable for `Prim doctor` / PATH CLI — those `_exit` in
-/// `PrimDesktopMain` before `PrimApp.main()`.
+/// Glass. XPC is started in `PrimDesktopMain` before this runs.
 final class DeskAppDelegate: NSObject, NSApplicationDelegate {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { false }
 
@@ -51,6 +51,7 @@ final class DeskAppDelegate: NSObject, NSApplicationDelegate {
     func application(_ app: NSApplication, shouldSaveApplicationState coder: NSCoder) -> Bool { false }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        PrimsDesktopXPCHost.shared.start()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         for window in NSApp.windows where window.canBecomeMain {

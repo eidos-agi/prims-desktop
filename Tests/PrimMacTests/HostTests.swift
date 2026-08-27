@@ -306,7 +306,11 @@ final class HostTests: XCTestCase {
             "/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"
         )
         XCTAssertNotEqual(DesktopCLI.principalURL().path, DesktopCLI.helperURL().path)
-        XCTAssertFalse(DesktopCLI.cliURL().path.contains("/Contents/Helpers/prims-desktop"))
+        XCTAssertEqual(
+            ProductIdentity.xpcEndpointURL().lastPathComponent,
+            "cli.xpc.endpoint"
+        )
+        XCTAssertFalse(ProcessEntry.isLaunchServicesAppProcess())
         XCTAssertEqual(DesktopCLI.fdaNote, ProductIdentity.fdaNote)
         XCTAssertEqual(ChatDB.fdaNote, ProductIdentity.fdaNote)
         XCTAssertFalse(ProductIdentity.fdaNote.contains("~/.local/bin"))
@@ -350,8 +354,8 @@ final class HostTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(trampoline.contains("exec "))
-        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/MacOS/Prim"))
-        XCTAssertFalse(trampoline.contains("Contents/Helpers/prims-desktop"))
+        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"))
+        XCTAssertFalse(trampoline.contains("Contents/MacOS/Prim"))
         XCTAssertFalse(trampoline.contains("chat.db"))
         XCTAssertFalse(trampoline.contains("ChatDB"))
         XCTAssertFalse(trampoline.contains("sqlite"))
@@ -374,6 +378,11 @@ final class HostTests: XCTestCase {
         XCTAssertTrue(ProcessEntry.shouldRunCLI(["config", "get"]), "do not forget config")
         XCTAssertTrue(ProcessEntry.shouldRunCLI(["--json", "doctor"]))
         XCTAssertFalse(ProcessEntry.shouldRunCLI(["--unknown-flag"]))
+        XCTAssertTrue(ProcessEntry.isXPCServe(["--xpc-serve"]))
+        XCTAssertFalse(ProcessEntry.isXPCServe([]))
+        XCTAssertTrue(ProcessEntry.requiresAppReader(["doctor"]))
+        XCTAssertTrue(ProcessEntry.requiresAppReader(["--json", "receive", "imessage-chatdb-receive"]))
+        XCTAssertFalse(ProcessEntry.requiresAppReader(["connectors"]))
     }
 
     func testCLIEntryIsProcessMainNotSwiftUIInit() throws {
@@ -398,12 +407,14 @@ final class HostTests: XCTestCase {
         XCTAssertTrue(main.contains("@main"))
         XCTAssertTrue(main.contains("enum PrimDesktopMain") || main.contains("struct PrimDesktopMain"))
         XCTAssertTrue(main.contains("ProcessEntry.shouldRunCLI"))
-        XCTAssertTrue(main.contains("DesktopCLI.run"))
-        XCTAssertTrue(main.contains("_exit"))
+        XCTAssertTrue(main.contains("PrimsDesktopXPCClient.run"))
+        XCTAssertTrue(main.contains("ProcessExit.flushAndExit"))
+        XCTAssertTrue(main.contains("PrimsDesktopXPCHost.runHeadless"))
+        XCTAssertFalse(main.contains("DesktopCLI.run"))
         XCTAssertTrue(main.contains("PrimApp.main()"))
-        let exitRange = try XCTUnwrap(main.range(of: "_exit"))
+        let exitRange = try XCTUnwrap(main.range(of: "flushAndExit"))
         let glassRange = try XCTUnwrap(main.range(of: "PrimApp.main()"))
-        XCTAssertTrue(exitRange.lowerBound < glassRange.lowerBound, "_exit must come before PrimApp.main()")
+        XCTAssertTrue(exitRange.lowerBound < glassRange.lowerBound, "CLI must flush/_exit before PrimApp.main()")
         for verb in ["connectors", "status", "receive", "open", "doctor", "asmp", "config"] {
             XCTAssertTrue(cli.contains("case \"\(verb)\":"), "DesktopCLI.invoke missing \(verb)")
         }
@@ -449,13 +460,30 @@ final class HostTests: XCTestCase {
             contentsOf: root.appendingPathComponent("scripts/install-cli.sh"),
             encoding: .utf8
         )
-        XCTAssertTrue(trampoline.contains("exec \"$PRIM\" \"$@\""))
-        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/MacOS/Prim"))
-        XCTAssertFalse(trampoline.contains("Helpers/prims-desktop"))
+        XCTAssertTrue(trampoline.contains("exec \"$CLIENT\" \"$@\""))
+        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"))
+        XCTAssertFalse(trampoline.contains("Contents/MacOS/Prim"))
         XCTAssertFalse(install.contains("codesign"))
-        XCTAssertTrue(install.contains("Contents/MacOS/Prim"))
         XCTAssertTrue(install.contains("Contents/Helpers/prims-desktop"))
-        XCTAssertTrue(install.contains("must not exec Contents/Helpers/prims-desktop"))
+        XCTAssertTrue(install.contains("must not exec Contents/MacOS/Prim"))
+        let client = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimsDesktopCLI/main.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(client.contains("PrimsDesktopXPCClient"))
+        XCTAssertTrue(client.contains("flushAndExit"))
+        XCTAssertFalse(client.contains("ChatDB"))
+        XCTAssertFalse(client.contains("sqlite3_open"))
+        XCTAssertFalse(client.contains("DesktopCLI.run"))
+        let chatdb = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/ChatDB.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(chatdb.contains("isLaunchServicesAppProcess"))
+        let tcc = try String(contentsOf: root.appendingPathComponent("scripts/TCC.md"), encoding: .utf8)
+        XCTAssertTrue(tcc.contains("LaunchServices"))
+        XCTAssertTrue(tcc.contains("XPC"))
+        XCTAssertTrue(tcc.contains("client_type"))
     }
 
     func testSourcesDoNotAskFDAForLooseCLI() throws {

@@ -3,17 +3,22 @@ import PrimMacCore
 
 /// Process entry for `/Applications/Prims Desktop.app/Contents/MacOS/Prim`.
 ///
-/// CLI verbs must run and `_exit` here — before `PrimApp.main()`, before
-/// `NSApplication`, before `DeskAppDelegate.applicationDidFinishLaunching`.
-/// A check inside `PrimApp.init()` is too late; that is how `Prim doctor` hung.
+/// LaunchServices (Finder / `NSWorkspace.openApplication` / `--xpc-serve`)
+/// hosts XPC and is the FDA client. A shell-exec CLI verb talks XPC and
+/// `_exit`s after fflush — it must not call ChatDB in this process.
 @main
 enum PrimDesktopMain {
     static func main() {
         let args = Array(CommandLine.arguments.dropFirst())
-        if ProcessEntry.shouldRunCLI(args) {
-            let status = DesktopCLI.run(args)
-            _exit(status)
+        if ProcessEntry.isXPCServe(args) {
+            PrimsDesktopXPCHost.runHeadless()
+            return
         }
+        if ProcessEntry.shouldRunCLI(args) {
+            let status = PrimsDesktopXPCClient.run(args)
+            ProcessExit.flushAndExit(status)
+        }
+        PrimsDesktopXPCHost.shared.start()
         PrimApp.main()
     }
 }

@@ -1,10 +1,11 @@
 #!/bin/sh
-# PATH trampoline. Exec the bundle executable — TCC client_type 0.
-# Never exec Contents/Helpers/* from PATH. Not a TCC principal. Contains no reader.
+# PATH trampoline. Thin XPC client — does not open chat.db.
+# Exec the in-bundle client helper. Never posix_spawn the bundle executable
+# from a tty (that is TCC client_type 1 and stays locked). See scripts/TCC.md.
 set -e
-PRIM="/Applications/Prims Desktop.app/Contents/MacOS/Prim"
-if [ ! -x "$PRIM" ]; then
-  echo "prims-desktop: app executable missing at $PRIM — assemble the app with ./scripts/build.sh" >&2
+CLIENT="/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"
+if [ ! -x "$CLIENT" ]; then
+  echo "prims-desktop: XPC client missing at $CLIENT — assemble the app with ./scripts/build.sh" >&2
   exit 127
 fi
-exec "$PRIM" "$@"
+exec "$CLIENT" "$@"

@@ -6,7 +6,7 @@ ROOT="$(realpath "$ROOT")"
 cd "$ROOT"
 export PATH="$HOME/.local/bin:$HOME/.asmp/bin:$PATH"
 
-# Process-entry source lock. A VM can prove this; chat.db readable is the Mac prove.
+# Process-entry + XPC source lock. A VM can prove this; chat.db readable is the Mac prove.
 python3 - <<'PY'
 from pathlib import Path
 root = Path(".").resolve()
@@ -16,17 +16,28 @@ if any(line == "@main" or line.startswith("@main ") for line in app.splitlines()
     raise SystemExit("PrimApp is still the process entry")
 if "DesktopCLI" in app:
     raise SystemExit("App.swift peeks DesktopCLI — that is an init() gate")
-if "@main" not in main or "DesktopCLI.run" not in main or "_exit" not in main:
-    raise SystemExit("PrimDesktopMain must @main, run DesktopCLI, and _exit")
-if main.find("_exit") >= main.find("PrimApp.main()"):
-    raise SystemExit("_exit must happen before PrimApp.main()")
-if "ProcessEntry.shouldRunCLI" not in main:
-    raise SystemExit("PrimDesktopMain must use ProcessEntry.shouldRunCLI")
+if "@main" not in main or "PrimsDesktopXPCClient.run" not in main or "flushAndExit" not in main:
+    raise SystemExit("PrimDesktopMain must @main, XPC-client CLI verbs, and flushAndExit")
+if "DesktopCLI.run" in main:
+    raise SystemExit("PrimDesktopMain must not run DesktopCLI in a shell-exec process")
+if main.find("flushAndExit") >= main.find("PrimApp.main()"):
+    raise SystemExit("flushAndExit must happen before PrimApp.main()")
+if "runHeadless" not in main:
+    raise SystemExit("PrimDesktopMain must host --xpc-serve headless")
 tramp = (root / "scripts/prims-desktop-trampoline.sh").read_text()
-if "Contents/MacOS/Prim" not in tramp or "exec " not in tramp:
-    raise SystemExit("trampoline must exec MacOS/Prim")
-if "Helpers/prims-desktop" in tramp:
-    raise SystemExit("trampoline must not exec the helper")
+if "Contents/Helpers/prims-desktop" not in tramp or "exec " not in tramp:
+    raise SystemExit("trampoline must exec the XPC client helper")
+if "Contents/MacOS/Prim" in tramp:
+    raise SystemExit("trampoline must not exec MacOS/Prim from a shell")
+client = (root / "Sources/PrimsDesktopCLI/main.swift").read_text()
+if "ChatDB" in client or "sqlite3_open" in client:
+    raise SystemExit("PATH client must not open chat.db")
+chatdb = (root / "Sources/PrimMacCore/ChatDB.swift").read_text()
+if "isLaunchServicesAppProcess" not in chatdb:
+    raise SystemExit("ChatDB must refuse shell-exec processes")
+tcc = (root / "scripts/TCC.md").read_text()
+if "LaunchServices" not in tcc or "XPC" not in tcc or "posix_spawn" not in tcc:
+    raise SystemExit("TCC.md must lock LS type 0 / shell-exec type 1 / PATH is XPC")
 build = (root / "scripts/build.sh").read_text().replace("\\\n", " ")
 if ".app.bak" in build:
     raise SystemExit("build.sh still mints bak apps")

@@ -113,14 +113,13 @@ already works. A `stop` means checkpoint, not grind.
 
 ## TCC / Full Disk Access
 
-The Messages grant is on the **app bundle** (`sh.prims.desktop`, TCC
-`client_type` 0). A helper Mach-O exec'd from a shell is `client_type` 1 —
-same Identifier is not enough. PATH `prims-desktop` must `exec`
-`/Applications/Prims Desktop.app/Contents/MacOS/Prim`. Process entry is
-`PrimDesktopMain`: CLI verbs call `DesktopCLI` and `_exit` before
-`NSApplication`. Do not use `~/Applications/Prims Desktop.app`. Do not
-leave bak apps in `/Applications`. Do not resign Helpers to "fix" FDA.
-The durable note is `scripts/TCC.md`.
+The Messages grant is on the **LaunchServices-launched app bundle**
+(`sh.prims.desktop`, TCC `client_type` 0). Shell-exec of
+`Contents/MacOS/Prim` is `client_type` 1 — same Identifier is not enough.
+PATH `prims-desktop` is an XPC client. Do not use
+`~/Applications/Prims Desktop.app`. Do not leave bak apps in
+`/Applications`. Do not resign Helpers to "fix" FDA. The durable note is
+`scripts/TCC.md`.
 
 ## Drive sync (provisional)
 

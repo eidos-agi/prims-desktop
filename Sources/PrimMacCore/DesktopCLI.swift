@@ -244,6 +244,8 @@ public enum DesktopCLI {
             "chat_db_readable": readable,
             "fda": readable,
             "fda_note": fdaNote,
+            "tcc_reader": ProcessEntry.isLaunchServicesAppProcess() ? "app" : "denied",
+            "tcc_parent": ProcessEntry.parentProcessName() ?? "",
             "asmp": ASMP.json(asmp),
         ]
         if json {
@@ -258,6 +260,7 @@ public enum DesktopCLI {
             "trampoline  \(trampoline.path)\(trampolineExists ? (trampolineIsScript ? "  (script)" : "  (NOT a trampoline)") : "  (not installed)")",
             "principal   \(principal.path)\(principalExists ? "" : "  (missing)")",
             "principal id \(principalIdentifier ?? "(unsigned / unknown)")",
+            "tcc reader  \(ProcessEntry.isLaunchServicesAppProcess() ? "app" : "denied")",
             "running     \(CommandLine.arguments[0])",
             "helper      \(helper.path)\(helperExists ? "" : "  (missing)")",
             "helper team \(helperTeam ?? "(unsigned / unknown)")",
@@ -533,16 +536,16 @@ public enum DesktopCLI {
         ProductIdentity.executableURL()
     }
 
-    /// Spawn / PATH target. The bundle executable, then the trampoline.
-    /// Never the helper Mach-O — a shell-exec'd helper is TCC client_type 1.
+    /// PATH target: trampoline script, then the XPC client helper.
+    /// Never spawn MacOS/Prim from a shell — that is TCC client_type 1.
     public static func cliURL() -> URL {
-        let principal = principalURL()
-        if FileManager.default.isExecutableFile(atPath: principal.path) {
-            return principal
-        }
         let trampoline = ProductIdentity.trampolineURL()
         if FileManager.default.isExecutableFile(atPath: trampoline.path) {
             return trampoline
+        }
+        let helper = helperURL()
+        if FileManager.default.isExecutableFile(atPath: helper.path) {
+            return helper
         }
         let argv0 = CommandLine.arguments[0]
         if argv0.hasPrefix("/") {

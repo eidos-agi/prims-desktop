@@ -1,4 +1,6 @@
-import Foundation
+import Darwin
 import PrimMacCore
 
-exit(DesktopCLI.run(Array(CommandLine.arguments.dropFirst())))
+/// Thin PATH client. Does not open chat.db. Talks XPC to the LS-launched app.
+let status = PrimsDesktopXPCClient.run(Array(CommandLine.arguments.dropFirst()))
+ProcessExit.flushAndExit(status)

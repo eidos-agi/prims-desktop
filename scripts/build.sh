@@ -98,7 +98,7 @@ fi
 
 echo "built $APP"
 echo "principal $APP/Contents/MacOS/Prim"
-echo "helpers $APP/Contents/Helpers/prims-desktop (in-app spawn only — do not exec from PATH)"
+echo "helpers $APP/Contents/Helpers/prims-desktop (PATH XPC client — does not open chat.db)"
 echo "helpers $APP/Contents/Helpers/imessage-chatdb-receive (in-app spawn only — do not exec from PATH)"
 echo "next: ./scripts/install-cli.sh"
 echo "do not install deploy/prims-desktop.fulldisk.mobileconfig"

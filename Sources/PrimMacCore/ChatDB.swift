@@ -80,6 +80,9 @@ public enum ChatDB {
     }
 
     private static func openDB() -> OpaquePointer? {
+        // Shell-exec of MacOS/Prim is TCC client_type 1. Only the LS-launched
+        // app process (parent launchd) may open chat.db.
+        guard ProcessEntry.isLaunchServicesAppProcess() else { return nil }
         var db: OpaquePointer?
         let url = "file:" + path + "?mode=ro"
         let rc = sqlite3_open_v2(url, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, nil)

@@ -18,7 +18,7 @@ public enum ProductIdentity {
         URL(fileURLWithPath: appPath)
     }
 
-    /// Bundle executable. PATH CLI must exec this (TCC client_type 0).
+    /// Bundle executable. Only the LaunchServices-launched instance is the FDA client.
     public static func executableURL() -> URL {
         appURL()
             .appendingPathComponent("Contents/MacOS")
@@ -39,5 +39,15 @@ public enum ProductIdentity {
 
     public static func trampolineURL() -> URL {
         Paths.home().appendingPathComponent(".local/bin/prims-desktop")
+    }
+
+    public static func supportDirectory() -> URL {
+        Paths.home()
+            .appendingPathComponent("Library/Application Support/Prims Desktop")
+    }
+
+    /// NSXPCListenerEndpoint rendezvous. 0600. Written by the LS-launched app.
+    public static func xpcEndpointURL() -> URL {
+        supportDirectory().appendingPathComponent("cli.xpc.endpoint")
     }
 }

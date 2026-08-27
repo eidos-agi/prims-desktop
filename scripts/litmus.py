@@ -147,15 +147,15 @@ def check_source_identity() -> None:
     tramp = TRAMPOLINE_SRC.read_text()
     if (
         "exec " in tramp
-        and APP_EXEC_SNIP in tramp
-        and HELPER_EXEC_SNIP not in tramp
+        and HELPER_EXEC_SNIP in tramp
+        and APP_EXEC_SNIP not in tramp
         and "chat.db" not in tramp
         and "ChatDB" not in tramp
         and "sqlite" not in tramp
     ):
         ok("trampoline_source_no_chatdb")
     else:
-        fail("trampoline_source_no_chatdb", "trampoline must exec MacOS/Prim and not read chat.db")
+        fail("trampoline_source_no_chatdb", "trampoline must exec the XPC client helper and not read chat.db")
 
     old_hits: list[str] = []
     exact_ok = False
@@ -470,10 +470,10 @@ def check_pro() -> None:
         body = Path(tramp).read_text(errors="replace")
         if "Mach-O" in kind:
             fail("path_cli_is_trampoline", f"{tramp} is a Mach-O TCC principal; want a trampoline script")
-        elif "exec " in body and APP_EXEC_SNIP in body and HELPER_EXEC_SNIP not in body:
+        elif "exec " in body and HELPER_EXEC_SNIP in body and APP_EXEC_SNIP not in body:
             ok("path_cli_is_trampoline", tramp)
         else:
-            fail("path_cli_is_trampoline", f"{tramp} must exec {APP_EXEC_SNIP}")
+            fail("path_cli_is_trampoline", f"{tramp} must exec the XPC client {HELPER_EXEC_SNIP}")
 
     readme = (ROOT / "README.md").read_text()
     if "github.com/eidos-agi/prims-desktop" in readme and "~/repos-eidos-agi/prims-desktop" in readme:
@@ -712,14 +712,18 @@ def check_deep() -> None:
     else:
         fail("cli_compat_symlink", f"{link} -> {link.resolve() if link.exists() else 'missing'}")
 
-    serve = run(["pgrep", "-f", "prims-desktop asmp serve"])
-    serve_prim = run(["pgrep", "-f", "Contents/MacOS/Prim asmp serve"])
+    serve = run(["pgrep", "-f", "Prims Desktop.app/Contents/MacOS/Prim"])
     if serve.returncode == 0 and serve.stdout.strip():
         ok("health_serve_process_alive", serve.stdout.splitlines()[0])
-    elif serve_prim.returncode == 0 and serve_prim.stdout.strip():
-        ok("health_serve_process_alive", serve_prim.stdout.splitlines()[0])
     else:
-        fail("health_serve_process_alive", "no MacOS/Prim asmp serve; health will go stale")
+        try:
+            hj = http_json(HEALTH)
+            if hj.get("service") == "prims-desktop":
+                ok("health_serve_process_alive", "health up")
+            else:
+                fail("health_serve_process_alive", "no LS-launched app process; health will go stale")
+        except Exception:
+            fail("health_serve_process_alive", "no LS-launched app process; health will go stale")
 
     try:
         hj = http_json(HEALTH)
@@ -748,7 +752,7 @@ def check_deep() -> None:
         doctor = cli_json(["doctor"])
         need_d = {
             "overlay", "app", "cli", "asmp", "chat_db", "fda", "helper",
-            "cli_is_trampoline", "principal", "running",
+            "cli_is_trampoline", "principal", "running", "tcc_reader",
         }
         if need_d <= set(doctor):
             ok("doctor_json_schema")
@@ -760,6 +764,7 @@ def check_deep() -> None:
             fail("doctor_app_identity", f"app={doctor.get('app')} id={doctor.get('bundle_identifier')}")
         principal = str(doctor.get("principal") or "")
         running = str(doctor.get("running") or "")
+        reader = str(doctor.get("tcc_reader") or "")
         if doctor.get("cli_is_trampoline") and APP_EXEC_SNIP in principal:
             ok("trampoline_and_bundle_helper")
         else:
@@ -767,15 +772,13 @@ def check_deep() -> None:
                 "trampoline_and_bundle_helper",
                 "doctor must report PATH trampoline + principal Contents/MacOS/Prim",
             )
-        if "Contents/Helpers/prims-desktop" in running:
+        if reader == "app" and APP_EXEC_SNIP in running:
+            ok("doctor_running_principal_is_app", running)
+        else:
             fail(
                 "doctor_running_principal_is_app",
-                f"running={running} — PATH still exec'd the helper (client_type 1)",
+                f"tcc_reader={reader} running={running} — reader must be the LS-launched app",
             )
-        elif APP_EXEC_SNIP in running or APP_EXEC_SNIP in principal:
-            ok("doctor_running_principal_is_app", running or principal)
-        else:
-            fail("doctor_running_principal_is_app", f"running={running} principal={principal}")
     except Exception as e:
         fail("doctor_json_schema", str(e))
 
@@ -951,23 +954,41 @@ def check_tcc_identity() -> None:
     elif (
         "@main" in main_src
         and "ProcessEntry.shouldRunCLI" in main_src
-        and "DesktopCLI.run" in main_src
-        and "_exit" in main_src
+        and "PrimsDesktopXPCClient.run" in main_src
+        and "flushAndExit" in main_src
         and "PrimApp.main()" in main_src
-        and main_src.find("_exit") < main_src.find("PrimApp.main()")
+        and "DesktopCLI.run" not in main_src
+        and main_src.find("flushAndExit") < main_src.find("PrimApp.main()")
     ):
         ok("cli_entry_before_swiftui")
     else:
         fail(
             "cli_entry_before_swiftui",
-            "need @main PrimDesktopMain that _exit(DesktopCLI.run) before PrimApp.main()",
+            "need @main PrimDesktopMain that XPC-clients + flushAndExit before PrimApp.main()",
         )
 
     tramp_src = TRAMPOLINE_SRC.read_text() if TRAMPOLINE_SRC.is_file() else ""
-    if APP_EXEC_SNIP in tramp_src and "exec " in tramp_src and HELPER_EXEC_SNIP not in tramp_src:
+    if HELPER_EXEC_SNIP in tramp_src and "exec " in tramp_src and APP_EXEC_SNIP not in tramp_src:
         ok("trampoline_source_execs_app")
     else:
-        fail("trampoline_source_execs_app", "scripts/prims-desktop-trampoline.sh must exec MacOS/Prim")
+        fail("trampoline_source_execs_app", "trampoline must exec the XPC client helper, not MacOS/Prim")
+
+    client_src = (ROOT / "Sources" / "PrimsDesktopCLI" / "main.swift").read_text()
+    if (
+        "PrimsDesktopXPCClient" in client_src
+        and "flushAndExit" in client_src
+        and "ChatDB" not in client_src
+        and "sqlite3_open" not in client_src
+    ):
+        ok("path_client_no_chatdb")
+    else:
+        fail("path_client_no_chatdb", "PrimsDesktopCLI must be an XPC client with no ChatDB/sqlite3_open")
+
+    chatdb_src = (ROOT / "Sources" / "PrimMacCore" / "ChatDB.swift").read_text()
+    if "isLaunchServicesAppProcess" in chatdb_src:
+        ok("chatdb_refuses_shell_exec")
+    else:
+        fail("chatdb_refuses_shell_exec", "ChatDB.openDB must refuse unless parent is launchd")
 
     which = run(["which", "prims-desktop"]).stdout.strip()
     if not which:
@@ -977,10 +998,10 @@ def check_tcc_identity() -> None:
         body = Path(which).read_text(errors="replace") if Path(which).is_file() else ""
         if "Mach-O" in kind:
             fail("path_cli_execs_macos_prim", f"{which} is a Mach-O")
-        elif APP_EXEC_SNIP in body and HELPER_EXEC_SNIP not in body and "exec " in body:
+        elif HELPER_EXEC_SNIP in body and APP_EXEC_SNIP not in body and "exec " in body:
             ok("path_cli_execs_macos_prim", which)
         else:
-            fail("path_cli_execs_macos_prim", f"{which} must exec {APP_EXEC_SNIP}")
+            fail("path_cli_execs_macos_prim", f"{which} must exec the XPC client, not MacOS/Prim")
 
     build = (ROOT / "scripts" / "build.sh").read_text()
     deep_stomp = [cmd for cmd in build_sign_commands(build) if "--deep" in cmd and "--verify" not in cmd]
@@ -1005,10 +1026,15 @@ def check_tcc_identity() -> None:
     tcc_note = ROOT / "scripts" / "TCC.md"
     if tcc_note.is_file():
         note = tcc_note.read_text()
-        if "client_type" in note and "MacOS/Prim" in note and "Do not exec them from PATH" in note:
+        if (
+            "client_type" in note
+            and "LaunchServices" in note
+            and "XPC" in note
+            and "posix_spawn" in note
+        ):
             ok("tcc_model_written")
         else:
-            fail("tcc_model_written", "scripts/TCC.md missing the locked client_type model")
+            fail("tcc_model_written", "scripts/TCC.md must say LS app is type 0; shell-exec Prim is type 1; PATH is XPC")
     else:
         fail("tcc_model_written", "missing scripts/TCC.md")
 
@@ -1055,8 +1081,24 @@ def check_tcc_identity() -> None:
         else:
             fail(cid, ident or blob.replace("\n", " ")[:160])
 
+    pipe = run(["prims-desktop", "--json", "doctor"], timeout=45)
+    pipe_doc: dict = {}
+    if not pipe.stdout.strip():
+        fail(
+            "doctor_json_on_pipe",
+            f"empty stdout exit={pipe.returncode} — fflush before _exit; do not require a TTY",
+        )
+    else:
+        try:
+            loaded = json.loads(pipe.stdout)
+            if isinstance(loaded, dict):
+                pipe_doc = loaded
+            ok("doctor_json_on_pipe", f"exit={pipe.returncode}")
+        except json.JSONDecodeError:
+            fail("doctor_json_on_pipe", f"not JSON: {pipe.stdout[:160]}")
+
     try:
-        doctor = cli_json(["doctor"])
+        doctor = pipe_doc if pipe_doc else cli_json(["doctor"])
     except Exception as e:
         fail("doctor_chatdb_inherits_app_fda", f"cannot run doctor: {e}")
         return
@@ -1066,25 +1108,23 @@ def check_tcc_identity() -> None:
     dr = str(doctor.get("principal_designated_requirement") or "")
     helper_ident = str(doctor.get("helper_identifier") or "")
     helper_dr = str(doctor.get("helper_designated_requirement") or "")
-    is_app = (
-        ident == BUNDLE_ID
-        and (APP_EXEC_SNIP in running or APP_EXEC_SNIP in principal)
-        and "Contents/Helpers/" not in running
-    )
+    reader = str(doctor.get("tcc_reader") or "")
+    is_app = reader == "app" and APP_EXEC_SNIP in running and ident == BUNDLE_ID
     readable = doctor.get("chat_db_readable")
     if not is_app:
         fail(
             "doctor_chatdb_inherits_app_fda",
-            "running principal is not MacOS/Prim "
-            f"running={running} Identifier={ident or helper_ident} DR={dr or helper_dr} "
-            "— do not skip as FDA not granted; do not grant FDA to a helper",
+            "reader is not the LS-launched app "
+            f"tcc_reader={reader} running={running} Identifier={ident or helper_ident} DR={dr or helper_dr} "
+            "— do not skip as FDA not granted; do not grant FDA to a helper; "
+            "do not exec MacOS/Prim from a shell",
         )
     elif readable is True:
         ok("doctor_chatdb_inherits_app_fda")
     else:
         fail(
             "doctor_chatdb_inherits_app_fda",
-            f"chat_db_readable={readable} running={running} Identifier={ident} DR={dr} "
+            f"chat_db_readable={readable} tcc_reader={reader} running={running} Identifier={ident} DR={dr} "
             f"helper Identifier={helper_ident} helper DR={helper_dr}",
         )
 
