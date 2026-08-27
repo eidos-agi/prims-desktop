@@ -96,6 +96,7 @@ struct StageView: View {
 
 struct MessageTranscript: View {
     let messages: [ChatDB.Message]
+    private let names = PersonNames.load()
 
     private var ordered: [ChatDB.Message] {
         Array(messages.reversed())
@@ -106,7 +107,7 @@ struct MessageTranscript: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(ordered) { msg in
-                        MessageBubble(message: msg)
+                        MessageBubble(message: msg, names: names)
                             .id(msg.id)
                     }
                 }
@@ -126,12 +127,17 @@ struct MessageTranscript: View {
 
 struct MessageBubble: View {
     let message: ChatDB.Message
+    var names: PersonNames.Index = PersonNames.load()
+
+    private var speaker: String {
+        names.label(for: message)
+    }
 
     var body: some View {
         HStack {
             if message.fromMe { Spacer(minLength: 48) }
             VStack(alignment: message.fromMe ? .trailing : .leading, spacing: 4) {
-                Text(message.fromMe ? "You" : "Them")
+                Text(speaker)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 Text(bodyText)
@@ -153,7 +159,7 @@ struct MessageBubble: View {
             if !message.fromMe { Spacer(minLength: 48) }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(message.fromMe ? "You" : "Them"): \(bodyText)")
+        .accessibilityLabel("\(speaker): \(bodyText)")
     }
 
     private var bodyText: String {

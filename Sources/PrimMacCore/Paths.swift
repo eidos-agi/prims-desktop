@@ -34,6 +34,14 @@ public enum Paths {
         home().appendingPathComponent("repos-eidos-agi/prim-web/demo")
     }
 
+    /// Local prim.person packs (and other packs). Override with `PRIM_PRIMS`.
+    public static func prims() -> URL {
+        if let env = ProcessInfo.processInfo.environment["PRIM_PRIMS"], !env.isEmpty {
+            return URL(fileURLWithPath: env)
+        }
+        return home().appendingPathComponent("Documents/Prims")
+    }
+
     /// Shipped ASMP manifest. Override with `PRIM_ASMP_YAML`.
     public static func asmpYAML() -> URL {
         if let env = ProcessInfo.processInfo.environment["PRIM_ASMP_YAML"], !env.isEmpty {
