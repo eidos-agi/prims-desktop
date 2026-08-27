@@ -567,7 +567,6 @@ public enum DesktopCLI {
     // MARK: - parse / emit
 
     private static func paseoStatus() -> StatusReport {
-        let tenants = (try? Paseo.ensureSeeded()) ?? []
         let health = (try? Paseo.healthAll()) ?? (false, [])
         let reached = health.1.filter(\.ok).map(\.tenant.id)
         let dark = health.1.filter(\.dark).map(\.tenant.id)

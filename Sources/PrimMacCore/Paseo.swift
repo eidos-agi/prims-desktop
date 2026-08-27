@@ -243,7 +243,7 @@ public enum Paseo {
         let tenants = try ensureSeeded()
         if tenants.isEmpty { return (false, []) }
         if execHook != nil || tunnelHook != nil {
-            let rows = tenants.map(health)
+            let rows = tenants.map { health(tenant: $0) }
             return (rows.contains(where: \.ok), rows)
         }
         let lock = NSLock()
@@ -252,7 +252,7 @@ public enum Paseo {
         for tenant in tenants {
             group.enter()
             DispatchQueue.global(qos: .userInitiated).async {
-                let row = health(tenant)
+                let row = health(tenant: tenant)
                 lock.lock()
                 scored.append(row)
                 lock.unlock()
