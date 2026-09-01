@@ -120,17 +120,7 @@ public enum DesktopCLI {
         }
         let received = ChatDB.receive(limit: limit)
         let note = received.ok ? received.note : fdaNote
-        let messages: [[String: Any]] = received.messages.map { msg in
-            var row: [String: Any] = [
-                "ROWID": msg.rowid,
-                "is_from_me": msg.fromMe,
-                "text": clip(msg.text, 240),
-            ]
-            if let date = msg.date {
-                row["date"] = ISO8601DateFormatter().string(from: date)
-            }
-            return row
-        }
+        let messages: [[String: Any]] = received.messages.map { $0.receiveJSON(textLimit: 240) }
         var payload: [String: Any] = [
             "ok": received.ok,
             "name": name,
@@ -154,8 +144,15 @@ public enum DesktopCLI {
         }
         var lines: [String] = [note]
         for msg in received.messages {
-            let who = msg.fromMe ? "me" : "them"
-            let text = clip(msg.text, 240)
+            let who: String
+            if msg.fromMe {
+                who = "me"
+            } else if !msg.identifier.isEmpty {
+                who = msg.identifier
+            } else {
+                who = "them"
+            }
+            let text = ChatDB.Message.clip(msg.text, 240)
             lines.append("  [\(msg.rowid)] \(who)  \(text)")
         }
         return Result(status: 0, stdout: lines.joined(separator: "\n") + "\n", stderr: "")
@@ -464,11 +461,6 @@ public enum DesktopCLI {
             i += 1
         }
         return Parsed(json: json, help: help, limit: limit, command: command, positionals: positionals)
-    }
-
-    private static func clip(_ text: String, _ n: Int) -> String {
-        if text.count <= n { return text }
-        return String(text.prefix(n)) + "…"
     }
 
     private static func fail(_ code: Int32, _ message: String, json: Bool) -> Result {
