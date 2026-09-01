@@ -1,0 +1,381 @@
+{
+  "updated": "2026-09-01T16:03:08-05:00",
+  "purpose": "Negative space for Whole Life \u2014 America. Every domain must appear as live/seed/stub/missing/deferred.",
+  "formula": "Life coverage = geometric_mean(breadth, depth, currency, connectivity, agency) \u00d7 100",
+  "score": 29,
+  "domains": [
+    {
+      "id": "identity",
+      "name": "Identity",
+      "includes": "legal identity, DOB, SSN refs, citizenship, names, signatures, biometrics",
+      "status": "stub",
+      "notes": "No identity Prim. Name fragments only inside person packs."
+    },
+    {
+      "id": "government-credentials",
+      "name": "Government credentials",
+      "includes": "passport, DL, voter reg, permits, TSA/Global Entry",
+      "status": "missing",
+      "notes": "No packs, no connector, no deferred stub before this file."
+    },
+    {
+      "id": "family",
+      "name": "Family",
+      "includes": "parents, siblings, children, spouses, extended family, kinship graph, family history",
+      "status": "seed",
+      "notes": "Some person packs with relationship prose; links[] incubating, not stamped; no family history Prim."
+    },
+    {
+      "id": "friends-social",
+      "name": "Friends & social relationships",
+      "includes": "friendships, history, closeness, introductions, social circles",
+      "status": "stub",
+      "notes": "Contact shells exist; no closeness/history graph."
+    },
+    {
+      "id": "professional-relationships",
+      "name": "Professional relationships",
+      "includes": "coworkers, partners, clients, vendors, advisors, investors",
+      "status": "seed",
+      "notes": "Many people packs with work notes; not a graph of roles over time."
+    },
+    {
+      "id": "home",
+      "name": "Home",
+      "includes": "residences, leases/mortgages, rooms, furnishings, repairs, keys, access",
+      "status": "missing",
+      "notes": "Address known to agents in memory, not as a Prim tree."
+    },
+    {
+      "id": "property-real-estate",
+      "name": "Property & real estate",
+      "includes": "owned properties, deeds, valuations, improvements, taxes, interests",
+      "status": "stub",
+      "notes": "239 Eagle / Creekside exist as agent work, not filed life packs here."
+    },
+    {
+      "id": "utilities-household",
+      "name": "Utilities & household services",
+      "includes": "electric, water, gas, internet, trash, security, landscaping",
+      "status": "missing",
+      "notes": "Explicit gap. Bill\u2192house\u2192card\u2192HVAC chain does not exist."
+    },
+    {
+      "id": "money",
+      "name": "Money",
+      "includes": "banking, cash, cards, brokerage, retirement, net worth, transfers",
+      "status": "seed",
+      "notes": "Large opff/tx dumps; receive not in-host; not a usable net-worth model."
+    },
+    {
+      "id": "income",
+      "name": "Income",
+      "includes": "salary, businesses, distributions, investments, royalties, reimbursements",
+      "status": "stub",
+      "notes": "Fragments in money dumps; no income Prim."
+    },
+    {
+      "id": "debt-obligations",
+      "name": "Debt & obligations",
+      "includes": "mortgages, cards, loans, guarantees, recurring commitments",
+      "status": "stub",
+      "notes": "Creekside loan is agent-owned, not a life Prim index."
+    },
+    {
+      "id": "taxes",
+      "name": "Taxes",
+      "includes": "federal, state, property, business, filings, supporting records",
+      "status": "missing",
+      "notes": "No tax year packs."
+    },
+    {
+      "id": "insurance",
+      "name": "Insurance",
+      "includes": "health, auto, property, liability, life, umbrella, claims",
+      "status": "missing",
+      "notes": "No insurance Prim."
+    },
+    {
+      "id": "work-career",
+      "name": "Work & career",
+      "includes": "employers, positions, accomplishments, compensation, reviews, career narrative",
+      "status": "seed",
+      "notes": "AIC/Boone/Eidos heavily represented in people + meetings; not a career Prim."
+    },
+    {
+      "id": "businesses-entities",
+      "name": "Businesses & entities",
+      "includes": "companies, ownership, governance, contracts, employees, IP",
+      "status": "seed",
+      "notes": "Company profiles exist (eidos-agi, aic-holdings, \u2026) but thin; ocsf/entity depth unclear in inbox."
+    },
+    {
+      "id": "health-care",
+      "name": "Health & care",
+      "includes": "clinicians, visits, diagnoses, medications, labs, imaging, allergies, insurance",
+      "status": "stub",
+      "notes": "ohf/ophf dirs with few packs; not a care graph."
+    },
+    {
+      "id": "body-fitness",
+      "name": "Body & fitness",
+      "includes": "activity, sleep, weight, exercise, biometrics, capabilities",
+      "status": "stub",
+      "notes": "aad exists as CLI elsewhere; not filed as continuous life Prims here."
+    },
+    {
+      "id": "food-consumption",
+      "name": "Food & consumption",
+      "includes": "groceries, restaurants, preferences, nutrition",
+      "status": "missing",
+      "notes": "Not modeled."
+    },
+    {
+      "id": "transportation",
+      "name": "Transportation",
+      "includes": "vehicles, registrations, maintenance, insurance, fuel, rideshare, transit",
+      "status": "stub",
+      "notes": "ovf seeds \u2260 mature vehicle (VIN, insurance, maintenance, drivers, \u2026)."
+    },
+    {
+      "id": "travel-places",
+      "name": "Travel & places",
+      "includes": "trips, reservations, flights, hotels, places visited, favorites, history",
+      "status": "missing",
+      "notes": "Calendar hints only."
+    },
+    {
+      "id": "communications",
+      "name": "Communications",
+      "includes": "email, SMS, iMessage, calls, voicemail, Slack/Teams, correspondence",
+      "status": "stub",
+      "notes": "iMessage receive live; thread index stubby; mail missing."
+    },
+    {
+      "id": "calendar-lived-time",
+      "name": "Calendar & lived time",
+      "includes": "appointments, events, meetings, birthdays, routines, what actually happened",
+      "status": "seed",
+      "notes": "Many calendar-event + omf packs; receive not in-host; thin 'what happened'."
+    },
+    {
+      "id": "tasks-responsibilities",
+      "name": "Tasks & responsibilities",
+      "includes": "commitments, errands, chores, recurring obligations, promises",
+      "status": "stub",
+      "notes": "otf=1; no tasks connector citing docket."
+    },
+    {
+      "id": "possessions",
+      "name": "Possessions",
+      "includes": "objects, electronics, furniture, clothing, warranties, receipts, serials",
+      "status": "stub",
+      "notes": "photo/scan dumps \u2260 possession registry."
+    },
+    {
+      "id": "digital-life",
+      "name": "Digital life",
+      "includes": "accounts, devices, domains, software, subscriptions, online identities, auth",
+      "status": "seed",
+      "notes": "Unusually strong via work/AI/repos; not a unified digital-life Prim index."
+    },
+    {
+      "id": "knowledge-learning",
+      "name": "Knowledge & learning",
+      "includes": "education, books, courses, skills, notes, research",
+      "status": "seed",
+      "notes": "Research/AI depth high; personal education/skills packs thin."
+    },
+    {
+      "id": "media-culture",
+      "name": "Media & culture",
+      "includes": "music, movies, shows, games, podcasts, art, tastes",
+      "status": "missing",
+      "notes": "album viewer exists in product; personal culture history not filed."
+    },
+    {
+      "id": "community-civic",
+      "name": "Community, civic & institutional life",
+      "includes": "clubs, churches/groups, schools, charities, memberships, voting",
+      "status": "missing",
+      "notes": "Not modeled."
+    },
+    {
+      "id": "goals-values-inner",
+      "name": "Goals, values & inner life",
+      "includes": "ambitions, preferences, beliefs, decisions, fears, principles, questions, plans",
+      "status": "stub",
+      "notes": "emf seeds; not a continuous inner-life model."
+    },
+    {
+      "id": "legacy-legal-death",
+      "name": "Legacy, legal & death",
+      "includes": "wills, trusts, POAs, beneficiaries, estate wishes, archives",
+      "status": "missing",
+      "notes": "Explicit gap. Highest-stakes empty domain."
+    }
+  ],
+  "open_needs": [
+    {
+      "id": "identity",
+      "domain": "identity",
+      "status": "stub",
+      "ask": "legal identity, DOB, SSN refs, citizenship, names, signatures, biometrics",
+      "notes": "No identity Prim. Name fragments only inside person packs."
+    },
+    {
+      "id": "government-credentials",
+      "domain": "government-credentials",
+      "status": "missing",
+      "ask": "passport, DL, voter reg, permits, TSA/Global Entry",
+      "notes": "No packs, no connector, no deferred stub before this file."
+    },
+    {
+      "id": "friends-social",
+      "domain": "friends-social",
+      "status": "stub",
+      "ask": "friendships, history, closeness, introductions, social circles",
+      "notes": "Contact shells exist; no closeness/history graph."
+    },
+    {
+      "id": "home",
+      "domain": "home",
+      "status": "missing",
+      "ask": "residences, leases/mortgages, rooms, furnishings, repairs, keys, access",
+      "notes": "Address known to agents in memory, not as a Prim tree."
+    },
+    {
+      "id": "property-real-estate",
+      "domain": "property-real-estate",
+      "status": "stub",
+      "ask": "owned properties, deeds, valuations, improvements, taxes, interests",
+      "notes": "239 Eagle / Creekside exist as agent work, not filed life packs here."
+    },
+    {
+      "id": "utilities-household",
+      "domain": "utilities-household",
+      "status": "missing",
+      "ask": "electric, water, gas, internet, trash, security, landscaping",
+      "notes": "Explicit gap. Bill\u2192house\u2192card\u2192HVAC chain does not exist."
+    },
+    {
+      "id": "income",
+      "domain": "income",
+      "status": "stub",
+      "ask": "salary, businesses, distributions, investments, royalties, reimbursements",
+      "notes": "Fragments in money dumps; no income Prim."
+    },
+    {
+      "id": "debt-obligations",
+      "domain": "debt-obligations",
+      "status": "stub",
+      "ask": "mortgages, cards, loans, guarantees, recurring commitments",
+      "notes": "Creekside loan is agent-owned, not a life Prim index."
+    },
+    {
+      "id": "taxes",
+      "domain": "taxes",
+      "status": "missing",
+      "ask": "federal, state, property, business, filings, supporting records",
+      "notes": "No tax year packs."
+    },
+    {
+      "id": "insurance",
+      "domain": "insurance",
+      "status": "missing",
+      "ask": "health, auto, property, liability, life, umbrella, claims",
+      "notes": "No insurance Prim."
+    },
+    {
+      "id": "health-care",
+      "domain": "health-care",
+      "status": "stub",
+      "ask": "clinicians, visits, diagnoses, medications, labs, imaging, allergies, insurance",
+      "notes": "ohf/ophf dirs with few packs; not a care graph."
+    },
+    {
+      "id": "body-fitness",
+      "domain": "body-fitness",
+      "status": "stub",
+      "ask": "activity, sleep, weight, exercise, biometrics, capabilities",
+      "notes": "aad exists as CLI elsewhere; not filed as continuous life Prims here."
+    },
+    {
+      "id": "food-consumption",
+      "domain": "food-consumption",
+      "status": "missing",
+      "ask": "groceries, restaurants, preferences, nutrition",
+      "notes": "Not modeled."
+    },
+    {
+      "id": "transportation",
+      "domain": "transportation",
+      "status": "stub",
+      "ask": "vehicles, registrations, maintenance, insurance, fuel, rideshare, transit",
+      "notes": "ovf seeds \u2260 mature vehicle (VIN, insurance, maintenance, drivers, \u2026)."
+    },
+    {
+      "id": "travel-places",
+      "domain": "travel-places",
+      "status": "missing",
+      "ask": "trips, reservations, flights, hotels, places visited, favorites, history",
+      "notes": "Calendar hints only."
+    },
+    {
+      "id": "communications",
+      "domain": "communications",
+      "status": "stub",
+      "ask": "email, SMS, iMessage, calls, voicemail, Slack/Teams, correspondence",
+      "notes": "iMessage receive live; thread index stubby; mail missing."
+    },
+    {
+      "id": "tasks-responsibilities",
+      "domain": "tasks-responsibilities",
+      "status": "stub",
+      "ask": "commitments, errands, chores, recurring obligations, promises",
+      "notes": "otf=1; no tasks connector citing docket."
+    },
+    {
+      "id": "possessions",
+      "domain": "possessions",
+      "status": "stub",
+      "ask": "objects, electronics, furniture, clothing, warranties, receipts, serials",
+      "notes": "photo/scan dumps \u2260 possession registry."
+    },
+    {
+      "id": "media-culture",
+      "domain": "media-culture",
+      "status": "missing",
+      "ask": "music, movies, shows, games, podcasts, art, tastes",
+      "notes": "album viewer exists in product; personal culture history not filed."
+    },
+    {
+      "id": "community-civic",
+      "domain": "community-civic",
+      "status": "missing",
+      "ask": "clubs, churches/groups, schools, charities, memberships, voting",
+      "notes": "Not modeled."
+    },
+    {
+      "id": "goals-values-inner",
+      "domain": "goals-values-inner",
+      "status": "stub",
+      "ask": "ambitions, preferences, beliefs, decisions, fears, principles, questions, plans",
+      "notes": "emf seeds; not a continuous inner-life model."
+    },
+    {
+      "id": "legacy-legal-death",
+      "domain": "legacy-legal-death",
+      "status": "missing",
+      "ask": "wills, trusts, POAs, beneficiaries, estate wishes, archives",
+      "notes": "Explicit gap. Highest-stakes empty domain."
+    }
+  ],
+  "factors": {
+    "breadth": 0.4,
+    "depth": 0.3,
+    "currency": 0.4,
+    "connectivity": 0.18,
+    "agency": 0.22
+  }
+}

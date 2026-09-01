@@ -1,0 +1,257 @@
+{
+  "title": "Whole Life \u2014 America",
+  "north_star": "A Prim is not a file format. A complete Prim system is an increasingly faithful, interconnected, actionable model of a human life.",
+  "formula": "Life coverage = geometric_mean(breadth, depth, currency, connectivity, agency) \u00d7 100",
+  "grades": {
+    "30": "Shape of the system visible; life could not be reconstructed.",
+    "50": "Approximately how the life operates.",
+    "70": "Most ordinary questions answerable without organizing first.",
+    "85": "Notices important things before you do.",
+    "100": "Asymptotic \u2014 a living human never finishes."
+  },
+  "updated": "2026-09-01T16:03:08-05:00",
+  "domain_count": 30,
+  "status_counts": {
+    "live": 0,
+    "seed": 8,
+    "stub": 12,
+    "missing": 10,
+    "deferred": 0
+  },
+  "domains": [
+    {
+      "id": "identity",
+      "name": "Identity",
+      "includes": "legal identity, DOB, SSN refs, citizenship, names, signatures, biometrics",
+      "status": "stub",
+      "notes": "No identity Prim. Name fragments only inside person packs."
+    },
+    {
+      "id": "government-credentials",
+      "name": "Government credentials",
+      "includes": "passport, DL, voter reg, permits, TSA/Global Entry",
+      "status": "missing",
+      "notes": "No packs, no connector, no deferred stub before this file."
+    },
+    {
+      "id": "family",
+      "name": "Family",
+      "includes": "parents, siblings, children, spouses, extended family, kinship graph, family history",
+      "status": "seed",
+      "notes": "Some person packs with relationship prose; links[] incubating, not stamped; no family history Prim."
+    },
+    {
+      "id": "friends-social",
+      "name": "Friends & social relationships",
+      "includes": "friendships, history, closeness, introductions, social circles",
+      "status": "stub",
+      "notes": "Contact shells exist; no closeness/history graph."
+    },
+    {
+      "id": "professional-relationships",
+      "name": "Professional relationships",
+      "includes": "coworkers, partners, clients, vendors, advisors, investors",
+      "status": "seed",
+      "notes": "Many people packs with work notes; not a graph of roles over time."
+    },
+    {
+      "id": "home",
+      "name": "Home",
+      "includes": "residences, leases/mortgages, rooms, furnishings, repairs, keys, access",
+      "status": "missing",
+      "notes": "Address known to agents in memory, not as a Prim tree."
+    },
+    {
+      "id": "property-real-estate",
+      "name": "Property & real estate",
+      "includes": "owned properties, deeds, valuations, improvements, taxes, interests",
+      "status": "stub",
+      "notes": "239 Eagle / Creekside exist as agent work, not filed life packs here."
+    },
+    {
+      "id": "utilities-household",
+      "name": "Utilities & household services",
+      "includes": "electric, water, gas, internet, trash, security, landscaping",
+      "status": "missing",
+      "notes": "Explicit gap. Bill\u2192house\u2192card\u2192HVAC chain does not exist."
+    },
+    {
+      "id": "money",
+      "name": "Money",
+      "includes": "banking, cash, cards, brokerage, retirement, net worth, transfers",
+      "status": "seed",
+      "notes": "Large opff/tx dumps; receive not in-host; not a usable net-worth model."
+    },
+    {
+      "id": "income",
+      "name": "Income",
+      "includes": "salary, businesses, distributions, investments, royalties, reimbursements",
+      "status": "stub",
+      "notes": "Fragments in money dumps; no income Prim."
+    },
+    {
+      "id": "debt-obligations",
+      "name": "Debt & obligations",
+      "includes": "mortgages, cards, loans, guarantees, recurring commitments",
+      "status": "stub",
+      "notes": "Creekside loan is agent-owned, not a life Prim index."
+    },
+    {
+      "id": "taxes",
+      "name": "Taxes",
+      "includes": "federal, state, property, business, filings, supporting records",
+      "status": "missing",
+      "notes": "No tax year packs."
+    },
+    {
+      "id": "insurance",
+      "name": "Insurance",
+      "includes": "health, auto, property, liability, life, umbrella, claims",
+      "status": "missing",
+      "notes": "No insurance Prim."
+    },
+    {
+      "id": "work-career",
+      "name": "Work & career",
+      "includes": "employers, positions, accomplishments, compensation, reviews, career narrative",
+      "status": "seed",
+      "notes": "AIC/Boone/Eidos heavily represented in people + meetings; not a career Prim."
+    },
+    {
+      "id": "businesses-entities",
+      "name": "Businesses & entities",
+      "includes": "companies, ownership, governance, contracts, employees, IP",
+      "status": "seed",
+      "notes": "Company profiles exist (eidos-agi, aic-holdings, \u2026) but thin; ocsf/entity depth unclear in inbox."
+    },
+    {
+      "id": "health-care",
+      "name": "Health & care",
+      "includes": "clinicians, visits, diagnoses, medications, labs, imaging, allergies, insurance",
+      "status": "stub",
+      "notes": "ohf/ophf dirs with few packs; not a care graph."
+    },
+    {
+      "id": "body-fitness",
+      "name": "Body & fitness",
+      "includes": "activity, sleep, weight, exercise, biometrics, capabilities",
+      "status": "stub",
+      "notes": "aad exists as CLI elsewhere; not filed as continuous life Prims here."
+    },
+    {
+      "id": "food-consumption",
+      "name": "Food & consumption",
+      "includes": "groceries, restaurants, preferences, nutrition",
+      "status": "missing",
+      "notes": "Not modeled."
+    },
+    {
+      "id": "transportation",
+      "name": "Transportation",
+      "includes": "vehicles, registrations, maintenance, insurance, fuel, rideshare, transit",
+      "status": "stub",
+      "notes": "ovf seeds \u2260 mature vehicle (VIN, insurance, maintenance, drivers, \u2026)."
+    },
+    {
+      "id": "travel-places",
+      "name": "Travel & places",
+      "includes": "trips, reservations, flights, hotels, places visited, favorites, history",
+      "status": "missing",
+      "notes": "Calendar hints only."
+    },
+    {
+      "id": "communications",
+      "name": "Communications",
+      "includes": "email, SMS, iMessage, calls, voicemail, Slack/Teams, correspondence",
+      "status": "stub",
+      "notes": "iMessage receive live; thread index stubby; mail missing."
+    },
+    {
+      "id": "calendar-lived-time",
+      "name": "Calendar & lived time",
+      "includes": "appointments, events, meetings, birthdays, routines, what actually happened",
+      "status": "seed",
+      "notes": "Many calendar-event + omf packs; receive not in-host; thin 'what happened'."
+    },
+    {
+      "id": "tasks-responsibilities",
+      "name": "Tasks & responsibilities",
+      "includes": "commitments, errands, chores, recurring obligations, promises",
+      "status": "stub",
+      "notes": "otf=1; no tasks connector citing docket."
+    },
+    {
+      "id": "possessions",
+      "name": "Possessions",
+      "includes": "objects, electronics, furniture, clothing, warranties, receipts, serials",
+      "status": "stub",
+      "notes": "photo/scan dumps \u2260 possession registry."
+    },
+    {
+      "id": "digital-life",
+      "name": "Digital life",
+      "includes": "accounts, devices, domains, software, subscriptions, online identities, auth",
+      "status": "seed",
+      "notes": "Unusually strong via work/AI/repos; not a unified digital-life Prim index."
+    },
+    {
+      "id": "knowledge-learning",
+      "name": "Knowledge & learning",
+      "includes": "education, books, courses, skills, notes, research",
+      "status": "seed",
+      "notes": "Research/AI depth high; personal education/skills packs thin."
+    },
+    {
+      "id": "media-culture",
+      "name": "Media & culture",
+      "includes": "music, movies, shows, games, podcasts, art, tastes",
+      "status": "missing",
+      "notes": "album viewer exists in product; personal culture history not filed."
+    },
+    {
+      "id": "community-civic",
+      "name": "Community, civic & institutional life",
+      "includes": "clubs, churches/groups, schools, charities, memberships, voting",
+      "status": "missing",
+      "notes": "Not modeled."
+    },
+    {
+      "id": "goals-values-inner",
+      "name": "Goals, values & inner life",
+      "includes": "ambitions, preferences, beliefs, decisions, fears, principles, questions, plans",
+      "status": "stub",
+      "notes": "emf seeds; not a continuous inner-life model."
+    },
+    {
+      "id": "legacy-legal-death",
+      "name": "Legacy, legal & death",
+      "includes": "wills, trusts, POAs, beneficiaries, estate wishes, archives",
+      "status": "missing",
+      "notes": "Explicit gap. Highest-stakes empty domain."
+    }
+  ],
+  "factors": {
+    "breadth": {
+      "score": 0.4,
+      "why": "8 seed / 12 stub / 10 missing / 0 live of 30. Work, money dumps, calendar, people, digital, entities show the shape \u2014 most adulthood domains absent. 0.40 = shape visible, not half-covered."
+    },
+    "depth": {
+      "score": 0.3,
+      "why": "Unusually deep in companies/software/AI/docs; shallow or empty elsewhere. Depth concentrated \u2260 depth across life. Vehicle/home/utilities earn almost nothing."
+    },
+    "currency": {
+      "score": 0.4,
+      "why": "Some harvests are fresh; continuous receive mostly in-host=no; whole domains never update."
+    },
+    "connectivity": {
+      "score": 0.18,
+      "why": "People graph incubating; almost no house\u2192utility\u2192card\u2192service chains; records mostly isolated."
+    },
+    "agency": {
+      "score": 0.22,
+      "why": "Can read/search some packs; cannot yet operate the life (notice bill spike, file estate, run household)."
+    }
+  },
+  "score": 29,
+  "score_interpretation": "Enough of Daniel exists that the shape of the system is clearly visible (work, companies, digital infrastructure, calendar/people seeds), but nowhere near enough that Daniel's life could be reconstructed from it. Concentrated artifact volume in ~8 domains must not fake completeness."
+}
