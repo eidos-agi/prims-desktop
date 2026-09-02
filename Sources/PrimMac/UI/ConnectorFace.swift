@@ -8,6 +8,7 @@ enum ConnectorFace {
         switch tool.name {
         case "opff-dally-receive": return "Dally"
         case "docket-webmcp": return "Docket"
+        case Paseo.connectorName: return "Paseo"
         case "prim-viewer-webmcp": return "Viewer"
         default: return tool.name
         }
@@ -18,6 +19,7 @@ enum ConnectorFace {
         switch tool.name {
         case "opff-dally-receive": return "Personal finance"
         case "docket-webmcp": return "Execution queue"
+        case Paseo.connectorName: return "Tenant catalog"
         case "prim-viewer-webmcp": return "Open pack viewer"
         default: return tool.direction
         }
@@ -28,6 +30,7 @@ enum ConnectorFace {
         switch tool.name {
         case "opff-dally-receive": return "dollarsign.circle.fill"
         case "docket-webmcp": return "list.bullet.rectangle.fill"
+        case Paseo.connectorName: return "circle.grid.3x3.fill"
         case "prim-viewer-webmcp": return "eye.fill"
         default: return "link"
         }
@@ -42,6 +45,10 @@ enum ConnectorFace {
                 return text
             }
             return blurb(tool)
+        }
+        if Paseo.isPaseo(tool) {
+            let n = (try? Paseo.loadTenants())?.count ?? 0
+            return n == 0 ? "Tenant catalog" : "\(n) cells"
         }
         return blurb(tool)
     }

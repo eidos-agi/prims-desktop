@@ -124,6 +124,8 @@ final class HostTests: XCTestCase {
         XCTAssertTrue(HostUI.cites(chatdb!, kind: "session"))
         XCTAssertTrue(catalog.connectors().contains { $0.name == "imessage-chatdb-receive" })
         XCTAssertTrue(catalog.connectors().contains { $0.name == "opff-dally-receive" })
+        XCTAssertTrue(catalog.connectors().contains { $0.name == Paseo.connectorName })
+        XCTAssertFalse(catalog.connectors().contains { HostUI.isViewer($0) })
     }
 
     func testStarCiteDoesNotMintPackTypes() {
@@ -311,6 +313,9 @@ final class HostTests: XCTestCase {
         let caps = ASMP.liveCapabilities(connectors: connectors)
         XCTAssertTrue(caps.contains("prims-desktop.host"))
         XCTAssertTrue(caps.contains("prims-desktop.cli"))
+        XCTAssertTrue(names.contains(Paseo.connectorName))
+        XCTAssertFalse(names.contains("prim-viewer-webmcp"))
+        XCTAssertFalse(names.contains("prim-viewer"))
         for name in names {
             XCTAssertTrue(caps.contains("connector.\(name)"), "missing connector.\(name)")
         }
@@ -428,5 +433,205 @@ final class HostTests: XCTestCase {
             XCTAssertFalse(text.contains(old), rel)
             XCTAssertFalse(text.contains("The app CLI is a separate binary"), rel)
         }
+    }
+
+    func testViewerIsSurfaceNotDesktopConnector() {
+        let viewer = PrimTool(
+            name: "prim-viewer-webmcp",
+            kind: "connector",
+            direction: "view",
+            cites: "*",
+            as: "webmcp",
+            bin: nil,
+            repo: "prim-web"
+        )
+        XCTAssertTrue(HostUI.isViewer(viewer))
+        XCTAssertTrue(HostUI.surfaces([viewer]).contains { $0.name == viewer.name })
+        XCTAssertFalse(HostUI.connectors([viewer]).contains { $0.name == viewer.name })
+    }
+
+    func testPaseoRegistrySeedsSevenCellsAndOneConnector() throws {
+        try withPaseoOverlay {
+            let tenants = try Paseo.ensureSeeded()
+            XCTAssertEqual(Set(tenants.map(\.id)), Set(Paseo.seedTenants.map(\.id)))
+            XCTAssertEqual(tenants.count, 7)
+            let local = try LocalOverlay.load()
+            XCTAssertNotNil(local.tool(named: Paseo.connectorName))
+            XCTAssertEqual(local.tools.filter { $0.name.hasPrefix("paseo") || $0.as == "paseo" }.count, 1)
+
+            let cells = DesktopCLI.invoke(["cells", "--json"])
+            XCTAssertEqual(cells.status, 0, cells.stderr)
+            let obj = try jsonObject(cells.stdout)
+            XCTAssertEqual(obj["connector"] as? String, Paseo.connectorName)
+            let rows = try XCTUnwrap(obj["cells"] as? [[String: Any]])
+            XCTAssertEqual(rows.count, 7)
+            XCTAssertTrue(rows.contains { ($0["id"] as? String) == "paseo-gmw" && ($0["port"] as? Int) == 16768 })
+            XCTAssertTrue(rows.contains { ($0["id"] as? String) == "laptop" && ($0["reach"] as? String) == "local" })
+        }
+    }
+
+    func testPaseoCellsAddIsARowNotAConnector() throws {
+        try withPaseoOverlay {
+            _ = try Paseo.ensureSeeded()
+            let added = DesktopCLI.invoke([
+                "cells", "add", "paseo-demo",
+                "--host", "127.0.0.1",
+                "--port", "16780",
+                "--reach", "ssh",
+                "--ssh", "hostkey",
+                "--notes", "new cell",
+                "--json",
+            ])
+            XCTAssertEqual(added.status, 0, added.stderr)
+            let tenants = try Paseo.loadTenants()
+            XCTAssertEqual(tenants.count, 8)
+            XCTAssertTrue(tenants.contains { $0.id == "paseo-demo" && $0.port == 16780 && $0.reach == .ssh })
+            let local = try LocalOverlay.load()
+            XCTAssertEqual(local.tools.filter { Paseo.isPaseo($0) }.count, 1)
+        }
+    }
+
+    func testPaseoV1VerbsAreStructuralAndSendNeedsNoWait() throws {
+        try withPaseoOverlay {
+            _ = try Paseo.ensureSeeded()
+            var calls: [[String]] = []
+            var hops: [String] = []
+            Paseo.execHook = { argv in
+                calls.append(argv)
+                return Paseo.ExecResult(status: 0, stdout: #"{"ok":true}"#, stderr: "", argv: argv, host: argv[4], tunneled: argv[4].contains("26768"))
+            }
+            Paseo.tunnelHook = { tenant in
+                hops.append("\(tenant.id):\(tenant.localForwardPort):\(tenant.ssh)")
+            }
+            var healthURLs: [String] = []
+            Paseo.healthHook = { tenant, url in
+                healthURLs.append(url.absoluteString)
+                return (200, #"{"ok":true,"status":"ok"}"#)
+            }
+
+            let blocked = DesktopCLI.invoke(["send", "paseo-gmw", Paseo.proveAgent, "hi", "--json"])
+            XCTAssertEqual(blocked.status, 1)
+            XCTAssertTrue(blocked.stdout.contains("no-wait") || blocked.stderr.contains("no-wait"))
+            XCTAssertTrue(calls.isEmpty, "send must not fire without --no-wait")
+
+            let inspect = DesktopCLI.invoke(["inspect", "paseo-gmw", Paseo.proveAgent, "--json"])
+            XCTAssertEqual(inspect.status, 0, inspect.stderr)
+            let inspectObj = try jsonObject(inspect.stdout)
+            XCTAssertEqual(inspectObj["tenant"] as? String, "paseo-gmw")
+            XCTAssertEqual(inspectObj["tunneled"] as? Bool, true)
+            XCTAssertEqual(inspectObj["host"] as? String, "127.0.0.1:26768")
+            XCTAssertEqual(hops, ["paseo-gmw:26768:hostkey"])
+
+            let laptop = DesktopCLI.invoke(["ls", "laptop", "--json"])
+            XCTAssertEqual(laptop.status, 0, laptop.stderr)
+            let laptopObj = try jsonObject(laptop.stdout)
+            XCTAssertEqual(laptopObj["tunneled"] as? Bool, false)
+            XCTAssertEqual(laptopObj["host"] as? String, "127.0.0.1:6767")
+
+            let health = DesktopCLI.invoke(["health", "paseo-gmw", "--json"])
+            XCTAssertEqual(health.status, 0, health.stderr)
+            let healthObj = try jsonObject(health.stdout)
+            XCTAssertEqual(healthObj["url"] as? String, "http://127.0.0.1:26768/api/health")
+            XCTAssertEqual(healthObj["http"] as? Int, 200)
+            XCTAssertEqual(healthURLs, ["http://127.0.0.1:26768/api/health"])
+            XCTAssertFalse(calls.contains { $0.contains("health") }, "must not invent paseo health")
+            let laptopHealth = DesktopCLI.invoke(["health", "laptop", "--json"])
+            XCTAssertEqual(laptopHealth.status, 0, laptopHealth.stderr)
+            let laptopHealthObj = try jsonObject(laptopHealth.stdout)
+            XCTAssertEqual(laptopHealthObj["url"] as? String, "http://127.0.0.1:6767/api/health")
+            XCTAssertEqual(laptopHealthObj["tunneled"] as? Bool, false)
+            do {
+                _ = try Paseo.operate(tenant: try Paseo.tenant(named: "laptop"), verb: "health")
+                XCTFail("operate must not invent paseo health")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("/api/health"), error.localizedDescription)
+            }
+            let logs = DesktopCLI.invoke(["logs", "laptop", "--json"])
+            XCTAssertEqual(logs.status, 0, logs.stderr)
+            let follow = DesktopCLI.invoke(["logs", "laptop", "--follow", "--json"])
+            XCTAssertEqual(follow.status, 1)
+            XCTAssertTrue((follow.stdout + follow.stderr).contains("follow"))
+
+            let send = DesktopCLI.invoke(["send", "paseo-gmw", Paseo.proveAgent, "--no-wait", "later", "--json"])
+            XCTAssertEqual(send.status, 0, send.stderr)
+            XCTAssertTrue(calls.contains { $0.contains("inspect") && $0.contains(Paseo.proveAgent) })
+            XCTAssertTrue(calls.contains { $0.contains("send") && $0.contains("--no-wait") })
+            XCTAssertFalse(calls.contains { $0.contains("--follow") })
+
+            let denied = DesktopCLI.invoke(["run", "paseo-gmw", "--json"])
+            XCTAssertEqual(denied.status, 1)
+            XCTAssertTrue((denied.stdout + denied.stderr).contains("out of v1"))
+        }
+    }
+
+    func testPaseoASMPManifestIsNotHostHealth() {
+        let m = ASMP.connectorManifest(Paseo.connectorTool)
+        XCTAssertEqual(m["name"] as? String, Paseo.connectorName)
+        XCTAssertEqual(m["kind"] as? String, "service")
+        XCTAssertEqual(m["parent"] as? String, "prims-desktop")
+        let endpoints = m["endpoints"] as? [[String: Any]] ?? []
+        XCTAssertFalse(endpoints.contains { ($0["protocol"] as? String) == "http" && ($0["port"] as? Int) == 7749 })
+        let health = m["health"] as? [String: Any]
+        XCTAssertEqual(health?["method"] as? String, "cli")
+        let target = (health?["target"] as? String) ?? ""
+        XCTAssertFalse(target.contains("7749"))
+        XCTAssertTrue(target.contains(Paseo.connectorName))
+        XCTAssertFalse(ASMP.capability(for: Paseo.connectorTool).contains("prim-viewer"))
+    }
+
+    func testPaseoStatusDoesNotLieWhenDark() throws {
+        try withPaseoOverlay {
+            _ = try Paseo.ensureSeeded()
+            Paseo.execHook = { argv in
+                Paseo.ExecResult(status: 1, stdout: "", stderr: "down", argv: argv, host: argv[4], tunneled: true)
+            }
+            Paseo.tunnelHook = { _ in }
+            Paseo.healthHook = { _, _ in (503, #"{"ok":false}"#) }
+            let result = DesktopCLI.invoke(["status", Paseo.connectorName, "--json"])
+            XCTAssertEqual(result.status, 2)
+            let obj = try jsonObject(result.stdout)
+            XCTAssertEqual(obj["ok"] as? Bool, false)
+            XCTAssertEqual(obj["reached"] as? Bool, false)
+            let dark = obj["tenants_dark"] as? [String] ?? []
+            XCTAssertEqual(Set(dark), Set(Paseo.seedTenants.map(\.id)))
+        }
+    }
+
+    func testConfigSetPreservesPaseoTenants() throws {
+        try withPaseoOverlay {
+            _ = try Paseo.ensureSeeded()
+            let before = try Paseo.loadTenants()
+            XCTAssertEqual(before.count, 7)
+            let catalog = RegistryDoc(
+                version: 1,
+                types: [],
+                tools: [Paseo.connectorTool]
+            )
+            _ = try LocalOverlay.setField(
+                tool: Paseo.connectorName,
+                field: "bin",
+                value: "paseo",
+                catalog: catalog
+            )
+            let after = try Paseo.loadTenants()
+            XCTAssertEqual(Set(after.map(\.id)), Set(before.map(\.id)))
+            XCTAssertNotNil(try LocalOverlay.load().tool(named: "prims-connectors-paseo"))
+        }
+    }
+
+    private func withPaseoOverlay(_ body: () throws -> Void) throws {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("prim-paseo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        setenv("PRIM_LOCAL_REGISTRY", tmp.appendingPathComponent("registry.local.json").path, 1)
+        defer { unsetenv("PRIM_LOCAL_REGISTRY") }
+        Paseo.resetTestHooks()
+        defer { Paseo.resetTestHooks() }
+        try body()
+    }
+
+    private func jsonObject(_ text: String) throws -> [String: Any] {
+        let data = try XCTUnwrap(text.data(using: .utf8))
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 }

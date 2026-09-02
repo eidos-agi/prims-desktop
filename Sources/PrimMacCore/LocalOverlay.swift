@@ -17,19 +17,54 @@ public enum LocalOverlay {
     }
 
     public static func save(_ doc: RegistryDoc) throws {
-        let path = url()
-        try FileManager.default.createDirectory(
-            at: path.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
         var next = doc
         if next.version == 0 { next.version = 1 }
         next.tools.sort { $0.name < $1.name }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        var data = try encoder.encode(next)
-        data.append(contentsOf: "\n".utf8)
-        try data.write(to: path, options: .atomic)
+        let encoded = try encoder.encode(next)
+        guard let typed = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
+            throw OverlayError("overlay encode failed")
+        }
+        var raw = (try? loadRaw()) ?? [:]
+        for (key, value) in typed {
+            raw[key] = value
+        }
+        try writeRaw(raw)
+    }
+
+    /// Overlay JSON including extra keys (paseo tenant catalog). Same file.
+    public static func loadRaw() throws -> [String: Any] {
+        let path = url()
+        guard FileManager.default.fileExists(atPath: path.path) else { return [:] }
+        let data = try Data(contentsOf: path)
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw OverlayError("overlay is not a JSON object")
+        }
+        return obj
+    }
+
+    public static func mergeRaw(_ extra: [String: Any]) throws {
+        var raw = try loadRaw()
+        for (key, value) in extra {
+            raw[key] = value
+        }
+        if raw["version"] == nil { raw["version"] = 1 }
+        if raw["types"] == nil { raw["types"] = [Any]() }
+        if raw["tools"] == nil { raw["tools"] = [Any]() }
+        try writeRaw(raw)
+    }
+
+    private static func writeRaw(_ raw: [String: Any]) throws {
+        let path = url()
+        try FileManager.default.createDirectory(
+            at: path.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let data = try JSONSerialization.data(withJSONObject: raw, options: [.prettyPrinted, .sortedKeys])
+        var out = data
+        out.append(contentsOf: "\n".utf8)
+        try out.write(to: path, options: .atomic)
     }
 
     /// Update one overlay tool field. Other overlay tools (including

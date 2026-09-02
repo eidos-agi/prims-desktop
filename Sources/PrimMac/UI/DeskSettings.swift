@@ -51,6 +51,18 @@ struct DeskSettingsView: View {
                             desk.refresh(tool)
                         }
                     }
+                } else if Paseo.isPaseo(tool) {
+                    Section("Tenants") {
+                        let tenants = (try? Paseo.ensureSeeded()) ?? []
+                        if tenants.isEmpty {
+                            Text("No tenants in the overlay registry.")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(tenants, id: \.id) { tenant in
+                                LabeledContent(tenant.id, value: tenant.human())
+                            }
+                        }
+                    }
                 } else {
                     Section {
                         Text("This account isn’t wired in the host yet. The registry entry is on this Mac.")
@@ -66,6 +78,10 @@ struct DeskSettingsView: View {
     private func status(_ tool: PrimTool) -> String {
         if HostUI.isInHost(tool) {
             return ChatDB.health() ? "Connected" : "Needs Full Disk Access"
+        }
+        if Paseo.isPaseo(tool) {
+            let n = (try? Paseo.loadTenants())?.count ?? 0
+            return n == 0 ? "Registered" : "\(n) cells"
         }
         return "Registered"
     }

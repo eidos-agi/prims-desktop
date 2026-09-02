@@ -44,6 +44,8 @@ struct StageView: View {
         if let tool = desk.current {
             if HostUI.isInHost(tool) {
                 iMessageStage
+            } else if Paseo.isPaseo(tool) {
+                paseoStage
             } else {
                 EmptyStage(
                     icon: ConnectorFace.icon(tool),
@@ -82,6 +84,29 @@ struct StageView: View {
         }
     }
 
+    @ViewBuilder
+    private var paseoStage: some View {
+        let tenants = (try? Paseo.ensureSeeded()) ?? []
+        if tenants.isEmpty {
+            EmptyStage(
+                icon: ConnectorFace.icon(Paseo.connectorTool),
+                title: "Paseo",
+                detail: "No tenants in the overlay registry."
+            )
+        } else {
+            List(tenants, id: \.id) { tenant in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tenant.id)
+                        .font(.system(size: 14, weight: .medium))
+                    Text(tenant.human())
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
     private func statusLine(_ tool: PrimTool) -> String {
         if HostUI.isInHost(tool) {
             if !ChatDB.health() { return "Needs Full Disk Access" }
@@ -89,6 +114,10 @@ struct StageView: View {
                 return "\(chat.messages.count) recent"
             }
             return ConnectorFace.blurb(tool)
+        }
+        if Paseo.isPaseo(tool) {
+            let n = (try? Paseo.loadTenants())?.count ?? 0
+            return n == 0 ? "Tenant catalog" : "\(n) cells"
         }
         return "Not wired yet"
     }

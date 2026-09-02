@@ -11,7 +11,8 @@ public struct HostCatalog: Sendable {
     }
 
     public static func load() throws -> HostCatalog {
-        HostCatalog(registry: try Registry.load(from: Paths.registry()))
+        try Paseo.ensureSeeded()
+        return HostCatalog(registry: try Registry.load(from: Paths.registry()))
     }
 
     public func listed() -> [PrimTool] {
