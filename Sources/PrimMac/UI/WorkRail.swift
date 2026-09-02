@@ -15,6 +15,7 @@ struct WorkRail: View {
             } else {
                 accountList
             }
+            debugControl
         }
         .navigationSplitViewColumnWidth(
             min: desk.railIcons ? 56 : 240,
@@ -76,6 +77,31 @@ struct WorkRail: View {
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
+    }
+
+    private var debugControl: some View {
+        VStack(spacing: 0) {
+            Divider()
+            Button(action: desk.showDebug) {
+                HStack(spacing: 8) {
+                    Image(systemName: "ladybug")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: desk.railIcons ? 32 : 20, height: 20)
+                    if !desk.railIcons {
+                        Text("Debug")
+                            .font(.system(size: 13, weight: .medium))
+                        Spacer(minLength: 0)
+                    }
+                }
+                .foregroundStyle(Ink.mute)
+                .padding(.horizontal, desk.railIcons ? 8 : 14)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Debug")
+            .accessibilityLabel("Debug")
+        }
     }
 
     @ViewBuilder

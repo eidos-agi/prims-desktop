@@ -335,6 +335,122 @@ def check_asked() -> None:
         ok("no_minted_pack_types")
 
 
+def check_debug() -> None:
+    """Daniel: sidebar Debug opens a detached same-process window that tails a forever day file."""
+    workrail = (ROOT / "Sources" / "PrimMac" / "UI" / "WorkRail.swift").read_text()
+    if 'Text("Debug")' in workrail and "desk.showDebug" in workrail:
+        ok("sidebar_has_debug")
+    else:
+        fail("sidebar_has_debug", "WorkRail is missing a Debug button")
+
+    debug_path = ROOT / "Sources" / "PrimMac" / "UI" / "DebugWindow.swift"
+    if not debug_path.is_file():
+        fail("debug_is_detached_window", "missing DebugWindow.swift")
+        fail("debug_tails_today", "missing DebugWindow.swift")
+        debug = ""
+    else:
+        debug = debug_path.read_text()
+        if ".sheet(" in debug or "beginSheet" in debug or "runModal" in debug:
+            fail("debug_is_detached_window", "Debug is a sheet/modal")
+        elif "NSWindow" in debug and "isReleasedWhenClosed" in debug and "DebugSession" in debug:
+            ok("debug_is_detached_window")
+        else:
+            fail("debug_is_detached_window", "Debug is not a second NSWindow of this process")
+        if "DebugTail" in debug and "DayLog.Store" in debug:
+            ok("debug_tails_today")
+        else:
+            fail("debug_tails_today", "window does not tail the day file")
+
+    daylog = (ROOT / "Sources" / "PrimMacCore" / "DayLog.swift").read_text()
+    paths = (ROOT / "Sources" / "PrimMacCore" / "Paths.swift").read_text()
+    if "Library/Logs/Prims Desktop" in daylog or "Library/Logs/Prims Desktop" in paths:
+        if "America/Chicago" in daylog:
+            ok("debug_log_path")
+        else:
+            fail("debug_log_path", "day file is not America/Chicago dated")
+    else:
+        fail("debug_log_path", "missing ~/Library/Logs/Prims Desktop")
+
+    if re.search(r"removeItem|FileManager\.default\.remove", daylog) or re.search(
+        r"func\s+rotate|logrotate", daylog
+    ):
+        fail("debug_logs_kept_forever", "DayLog deletes or rotates day files")
+    else:
+        ok("debug_logs_kept_forever")
+
+    plist = (ROOT / "Info.plist").read_text()
+    ids = re.findall(r"<key>CFBundleIdentifier</key>\s*<string>([^<]+)</string>", plist)
+    if ids == [BUNDLE_ID]:
+        ok("debug_same_bundle_id")
+    else:
+        fail("debug_same_bundle_id", f"bundle ids={ids}")
+
+    pkg = (ROOT / "Package.swift").read_text()
+    if '.executable(name: "prims-debug"' in pkg or "zeroshot" in pkg.lower():
+        fail("debug_not_a_helper_binary", "new helper or zeroshot product")
+    else:
+        ok("debug_not_a_helper_binary")
+
+    catalog_hits = []
+    for rel in [
+        "Sources/PrimMacCore/HostCatalog.swift",
+        "Sources/PrimMacCore/LocalOverlay.swift",
+        "Sources/PrimMacCore/HostUI.swift",
+        "Sources/PrimMacCore/ASMP.swift",
+    ]:
+        text = (ROOT / rel).read_text()
+        if re.search(r"zeroshot", text, re.I):
+            catalog_hits.append(rel)
+    if catalog_hits:
+        fail("debug_no_zeroshot_catalog", ", ".join(catalog_hits))
+    else:
+        ok("debug_no_zeroshot_catalog")
+
+    tests = (ROOT / "Tests" / "PrimMacTests" / "HostTests.swift").read_text()
+    if (
+        "func testDayLogAppendsLineToDayFile" in tests
+        and "store.append(" in tests
+        and "unit.probe" in tests
+        and "String(contentsOf:" in tests
+    ):
+        ok("debug_unit_appends_day_file")
+    else:
+        fail("debug_unit_appends_day_file", "HostTests must append and read a day-file line")
+
+    # Behavioral proof of the day-file contract (same path/date/append rules).
+    from datetime import datetime
+    from tempfile import TemporaryDirectory
+
+    try:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo("America/Chicago")
+    except Exception:
+        tz = None
+    now = datetime.now(tz) if tz else datetime.now().astimezone()
+    day = now.strftime("%Y-%m-%d.log")
+    with TemporaryDirectory() as tmp:
+        folder = Path(tmp) / "Prims Desktop"
+        folder.mkdir()
+        dest = folder / day
+        dest.write_text(f"{now.isoformat()}  unit.probe  litmus\n")
+        with dest.open("a", encoding="utf-8") as fh:
+            fh.write(f"{now.isoformat()}  second.line\n")
+        yesterday = folder / "1999-01-01.log"
+        yesterday.write_text("keep forever\n")
+        with dest.open("a", encoding="utf-8") as fh:
+            fh.write("still-today\n")
+        body = dest.read_text()
+        if "unit.probe" not in body:
+            fail("debug_day_file_appends", "line was not appended")
+        elif yesterday.read_text() != "keep forever\n":
+            fail("debug_day_file_appends", "old day was rewritten")
+        elif dest.name != day:
+            fail("debug_day_file_appends", dest.name)
+        else:
+            ok("debug_day_file_appends", dest.name)
+
+
 def check_naming() -> None:
     try:
         names = [r["name"] for r in cli_json(["connectors"]).get("connectors") or []]
@@ -923,6 +1039,7 @@ def main() -> int:
     if not args.naming and not args.pro and not args.deep:
         check_identity()
         check_asked()
+        check_debug()
     if not args.asked and not args.pro and not args.deep:
         if args.naming:
             check_identity()

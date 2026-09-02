@@ -410,6 +410,48 @@ final class HostTests: XCTestCase {
         XCTAssertFalse(trampoline.contains("sqlite"))
     }
 
+    func testDayLogAppendsLineToDayFile() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("prim-daylog-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = DayLog.Store(directory: root)
+        var chicago = Calendar(identifier: .gregorian)
+        chicago.timeZone = DayLog.timeZone
+        var parts = DateComponents()
+        parts.year = 2026
+        parts.month = 8
+        parts.day = 27
+        parts.hour = 23
+        parts.minute = 30
+        let evening = try XCTUnwrap(chicago.date(from: parts))
+        XCTAssertEqual(store.fileName(for: evening), "2026-08-27.log")
+
+        let url = try store.append("unit.probe", at: evening)
+        XCTAssertEqual(url.lastPathComponent, "2026-08-27.log")
+        XCTAssertTrue(url.path.contains("2026-08-27.log"))
+        let first = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(first.contains("unit.probe"), first)
+        XCTAssertTrue(first.hasSuffix("\n"))
+
+        let again = try store.append("second.line", at: evening)
+        XCTAssertEqual(again.path, url.path)
+        let both = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(both.contains("unit.probe"), both)
+        XCTAssertTrue(both.contains("second.line"), both)
+
+        parts.day = 26
+        let yesterday = try XCTUnwrap(chicago.date(from: parts))
+        let old = try store.append("old.day", at: yesterday)
+        XCTAssertEqual(old.lastPathComponent, "2026-08-26.log")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: old.path))
+        XCTAssertEqual(Set(store.existingDayFiles().map(\.lastPathComponent)), ["2026-08-26.log", "2026-08-27.log"])
+        XCTAssertTrue(DayLog.defaultDirectory.path.contains("Library/Logs/Prims Desktop")
+            || ProcessInfo.processInfo.environment["PRIM_DEBUG_LOG_DIR"] != nil)
+    }
+
     func testSourcesDoNotAskFDAForLooseCLI() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

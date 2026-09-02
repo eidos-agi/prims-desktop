@@ -10,6 +10,7 @@ enum ToolLaunch {
     }
 
     static func open(_ tool: PrimTool, pack: Data, name: String) -> Result {
+        DayLog.event("tool.launch", tool.name)
         guard HostUI.isProcess(tool) else {
             return Result(note: "\(tool.name) is not a local process tool", proof: "")
         }
