@@ -296,21 +296,19 @@ public enum ASMP {
 
     public static func ensureHealthServing() throws {
         if probeHealth() { return }
-        let bin = DesktopCLI.cliURL()
-        guard FileManager.default.isExecutableFile(atPath: bin.path) else {
-            throw LocalOverlay.OverlayError("prims-desktop CLI not installed at \(bin.path)")
+        if ProcessEntry.isLaunchServicesAppProcess() {
+            DispatchQueue.global(qos: .utility).async {
+                _ = serveHealth()
+            }
+            for _ in 0..<25 {
+                Thread.sleep(forTimeInterval: 0.1)
+                if probeHealth() { return }
+            }
+            throw LocalOverlay.OverlayError("health listener did not come up on \(healthURL.absoluteString)")
         }
-        let proc = Process()
-        proc.executableURL = bin
-        proc.arguments = ["asmp", "serve"]
-        proc.standardOutput = FileHandle.nullDevice
-        proc.standardError = FileHandle.nullDevice
-        try proc.run()
-        for _ in 0..<25 {
-            Thread.sleep(forTimeInterval: 0.1)
-            if probeHealth() { return }
-        }
-        throw LocalOverlay.OverlayError("health listener did not come up on \(healthURL.absoluteString)")
+        throw LocalOverlay.OverlayError(
+            "health must be served by the LaunchServices-launched app — do not exec MacOS/Prim from a shell"
+        )
     }
 
     /// Block forever serving GET /health on 127.0.0.1:7749.

@@ -358,9 +358,26 @@ final class HostTests: XCTestCase {
         )
         XCTAssertEqual(DesktopCLI.appURL().path, "/Applications/Prims Desktop.app")
         XCTAssertEqual(
+            DesktopCLI.principalURL().path,
+            "/Applications/Prims Desktop.app/Contents/MacOS/Prim"
+        )
+        XCTAssertEqual(
+            ProductIdentity.executableURL().path,
+            "/Applications/Prims Desktop.app/Contents/MacOS/Prim"
+        )
+        XCTAssertEqual(
             DesktopCLI.helperURL().path,
             "/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"
         )
+        XCTAssertNotEqual(DesktopCLI.principalURL().path, DesktopCLI.helperURL().path)
+        XCTAssertEqual(ProductIdentity.xpcServiceName, "Y6CQ4SWPWM.sh.prims.desktop.xpc")
+        XCTAssertEqual(ProductIdentity.xpcAgentLabel, "sh.prims.desktop.xpc")
+        XCTAssertEqual(ProductIdentity.xpcBrokerFlag, "--xpc-broker")
+        XCTAssertEqual(
+            ProductIdentity.staleXpcEndpointURL().lastPathComponent,
+            "cli.xpc.endpoint"
+        )
+        XCTAssertFalse(ProcessEntry.isLaunchServicesAppProcess())
         XCTAssertEqual(DesktopCLI.fdaNote, ProductIdentity.fdaNote)
         XCTAssertEqual(ChatDB.fdaNote, ProductIdentity.fdaNote)
         XCTAssertFalse(ProductIdentity.fdaNote.contains("~/.local/bin"))
@@ -405,9 +422,291 @@ final class HostTests: XCTestCase {
         )
         XCTAssertTrue(trampoline.contains("exec "))
         XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"))
+        XCTAssertFalse(trampoline.contains("Contents/MacOS/Prim"))
         XCTAssertFalse(trampoline.contains("chat.db"))
         XCTAssertFalse(trampoline.contains("ChatDB"))
         XCTAssertFalse(trampoline.contains("sqlite"))
+    }
+
+    func testProcessEntryRoutesEveryDesktopCLIVerb() {
+        XCTAssertEqual(
+            DesktopCLI.commands,
+            ["connectors", "status", "receive", "open", "doctor", "asmp", "config", "help"]
+        )
+        XCTAssertEqual(DesktopCLI.globalFlags, ["--json", "-h", "--help"])
+        XCTAssertFalse(ProcessEntry.shouldRunCLI([]), "empty argv is the human glass")
+        XCTAssertFalse(ProcessEntry.shouldRunCLI(["/tmp/note.prim"]))
+        for verb in DesktopCLI.commands {
+            XCTAssertTrue(ProcessEntry.shouldRunCLI([verb]), verb)
+        }
+        for flag in DesktopCLI.globalFlags {
+            XCTAssertTrue(ProcessEntry.shouldRunCLI([flag]), flag)
+        }
+        XCTAssertTrue(ProcessEntry.shouldRunCLI(["config", "get"]), "do not forget config")
+        XCTAssertTrue(ProcessEntry.shouldRunCLI(["--json", "doctor"]))
+        XCTAssertFalse(ProcessEntry.shouldRunCLI(["--unknown-flag"]))
+        XCTAssertTrue(ProcessEntry.isXPCServe(["--xpc-serve"]))
+        XCTAssertFalse(ProcessEntry.isXPCServe([]))
+        XCTAssertTrue(ProcessEntry.requiresAppReader(["doctor"]))
+        XCTAssertTrue(ProcessEntry.requiresAppReader(["--json", "receive", "imessage-chatdb-receive"]))
+        XCTAssertFalse(ProcessEntry.requiresAppReader(["connectors"]))
+    }
+
+    func testCLIEntryIsProcessMainNotSwiftUIInit() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let app = try String(contentsOf: root.appendingPathComponent("Sources/PrimMac/App.swift"), encoding: .utf8)
+        let main = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/PrimDesktopMain.swift"),
+            encoding: .utf8
+        )
+        let cli = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/DesktopCLI.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(
+            app.split("\n").contains(where: { $0 == "@main" || $0.hasPrefix("@main ") }),
+            "PrimApp must not be @main — that starts NSApplication"
+        )
+        XCTAssertFalse(app.contains("DesktopCLI"), "App.swift must not peek CLI — that is an init() gate")
+        XCTAssertTrue(main.contains("@main"))
+        XCTAssertTrue(main.contains("enum PrimDesktopMain") || main.contains("struct PrimDesktopMain"))
+        XCTAssertTrue(main.contains("ProcessEntry.shouldRunCLI"))
+        XCTAssertTrue(main.contains("PrimsDesktopXPCClient.run"))
+        XCTAssertTrue(main.contains("ProcessExit.flushAndExit"))
+        XCTAssertTrue(main.contains("PrimsDesktopXPCHost.runHeadless"))
+        XCTAssertFalse(main.contains("DesktopCLI.run"))
+        XCTAssertTrue(main.contains("PrimApp.main()"))
+        let exitRange = try XCTUnwrap(main.range(of: "flushAndExit"))
+        let glassRange = try XCTUnwrap(main.range(of: "PrimApp.main()"))
+        XCTAssertTrue(exitRange.lowerBound < glassRange.lowerBound, "CLI must flush/_exit before PrimApp.main()")
+        for verb in ["connectors", "status", "receive", "open", "doctor", "asmp", "config"] {
+            XCTAssertTrue(cli.contains("case \"\(verb)\":"), "DesktopCLI.invoke missing \(verb)")
+        }
+        XCTAssertTrue(cli.contains("public static let commands"))
+    }
+
+    func testBuildScriptDoesNotDeepStompIdentifiers() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let build = try String(contentsOf: root.appendingPathComponent("scripts/build.sh"), encoding: .utf8)
+        let joined = build.replacingOccurrences(of: "\\\n", with: " ")
+        for line in joined.split(separator: "\n").map(String.init) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("#") { continue }
+            guard trimmed.contains("codesign") else { continue }
+            if trimmed.contains("--deep") {
+                XCTAssertTrue(
+                    trimmed.contains("--verify"),
+                    "build.sh must not codesign --deep (resets nested Identifier): \(trimmed)"
+                )
+            }
+        }
+        XCTAssertTrue(build.contains("--identifier"))
+        XCTAssertTrue(build.contains("sh.prims.desktop"))
+        XCTAssertFalse(build.contains(".app.bak"))
+        XCTAssertFalse(build.contains("/Applications/Prims Desktop.app.bak"))
+        XCTAssertTrue(build.contains("mktemp"))
+        XCTAssertTrue(build.contains("Contents/MacOS/Prim"))
+    }
+
+    func testTrampolineAndInstallCLIExecAppExecutable() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let trampoline = try String(
+            contentsOf: root.appendingPathComponent("scripts/prims-desktop-trampoline.sh"),
+            encoding: .utf8
+        )
+        let install = try String(
+            contentsOf: root.appendingPathComponent("scripts/install-cli.sh"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(trampoline.contains("exec \"$CLIENT\" \"$@\""))
+        XCTAssertTrue(trampoline.contains("/Applications/Prims Desktop.app/Contents/Helpers/prims-desktop"))
+        XCTAssertFalse(trampoline.contains("Contents/MacOS/Prim"))
+        XCTAssertFalse(install.contains("codesign"))
+        XCTAssertTrue(install.contains("Contents/Helpers/prims-desktop"))
+        XCTAssertTrue(install.contains("must not exec Contents/MacOS/Prim"))
+        XCTAssertTrue(install.contains("grep -v"), "comments mentioning chat.db must not fail install")
+        let client = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimsDesktopCLI/main.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(client.contains("PrimsDesktopXPCClient"))
+        XCTAssertTrue(client.contains("flushAndExit"))
+        XCTAssertFalse(client.contains("ChatDB"))
+        XCTAssertFalse(client.contains("sqlite3_open"))
+        XCTAssertFalse(client.contains("DesktopCLI.run"))
+        let chatdb = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/ChatDB.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(chatdb.contains("isLaunchServicesAppProcess"))
+        let tcc = try String(contentsOf: root.appendingPathComponent("scripts/TCC.md"), encoding: .utf8)
+        XCTAssertTrue(tcc.contains("LaunchServices"))
+        XCTAssertTrue(tcc.contains("XPC"))
+        XCTAssertTrue(tcc.contains("client_type"))
+        XCTAssertTrue(tcc.contains("in-app Messages"))
+        let xpc = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/PrimsDesktopXPC.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(xpc.contains("NSKeyedArchiver"))
+        XCTAssertFalse(xpc.contains("archivedData(withRootObject:"))
+        XCTAssertTrue(xpc.contains("NSXPCListener(machServiceName:"))
+        XCTAssertTrue(xpc.contains("XPCPeerTrust"))
+        XCTAssertTrue(xpc.contains("ProductIdentity.teamID"))
+        XCTAssertTrue(xpc.contains("openApplication"))
+        XCTAssertFalse(xpc.contains("Contents/MacOS/Prim\""))
+    }
+
+    func testXPCRendezvousIsNamedServiceNotArchivedEndpoint() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let xpc = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/PrimsDesktopXPC.swift"),
+            encoding: .utf8
+        )
+        let identity = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMacCore/ProductIdentity.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(identity.contains("Y6CQ4SWPWM.sh.prims.desktop.xpc"))
+        XCTAssertTrue(xpc.contains("NSXPCListener(machServiceName:"))
+        XCTAssertTrue(xpc.contains("NSXPCConnection(machServiceName:"))
+        XCTAssertTrue(xpc.contains("registerAppEndpoint"))
+        XCTAssertTrue(xpc.contains("SMAppService"))
+        XCTAssertTrue(xpc.contains("XPCPeerTrust"))
+        XCTAssertTrue(xpc.contains("isTrusted(pid:"))
+        XCTAssertTrue(xpc.contains("ProductIdentity.teamID"))
+        XCTAssertTrue(xpc.contains("ProductIdentity.bundleIdentifier"))
+        XCTAssertFalse(xpc.contains("NSKeyedArchiver"))
+        XCTAssertFalse(xpc.contains("NSKeyedUnarchiver"))
+        XCTAssertFalse(xpc.contains("archivedData(withRootObject:"))
+        XCTAssertFalse(xpc.contains("sockaddr_un"))
+        XCTAssertFalse(xpc.contains("cli.sock"))
+        XCTAssertTrue(xpc.contains("openApplication"))
+        XCTAssertFalse(xpc.contains("posix_spawn"))
+        let client = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimsDesktopCLI/main.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(client.contains("xpcBrokerFlag") || client.contains("--xpc-broker"))
+        XCTAssertFalse(client.contains("sqlite3_open"))
+        XCTAssertFalse(client.contains("ChatDB"))
+        let plist = try String(
+            contentsOf: root.appendingPathComponent("LaunchAgents/sh.prims.desktop.xpc.plist"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(plist.contains("Y6CQ4SWPWM.sh.prims.desktop.xpc"))
+        XCTAssertTrue(plist.contains("MachServices"))
+        XCTAssertTrue(plist.contains("--xpc-broker"))
+        XCTAssertTrue(plist.contains("Contents/Helpers/prims-desktop"))
+        XCTAssertFalse(plist.contains("Contents/MacOS/Prim"))
+    }
+
+    func testFDAProveIsInAppMessagesNotPipedDoctor() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let stage = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/UI/StageView.swift"),
+            encoding: .utf8
+        )
+        let settings = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/UI/DeskSettings.swift"),
+            encoding: .utf8
+        )
+        let desk = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/DeskModel.swift"),
+            encoding: .utf8
+        )
+        let client = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimsDesktopCLI/main.swift"),
+            encoding: .utf8
+        )
+        let litmus = try String(
+            contentsOf: root.appendingPathComponent("scripts/litmus.py"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(stage.contains("MessageTranscript"))
+        XCTAssertTrue(stage.contains("ChatDB.health()"))
+        XCTAssertTrue(stage.contains("iMessage is connected"))
+        XCTAssertTrue(stage.contains("ProductIdentity.fdaNote"))
+        XCTAssertTrue(settings.contains("ChatDB.health() ? \"Connected\""))
+        XCTAssertTrue(settings.contains("desk.grantFDA()"))
+        XCTAssertTrue(settings.contains("tryRevealMessages"))
+        XCTAssertTrue(desk.contains("ChatDB.receive"))
+        XCTAssertTrue(desk.contains("tryRevealMessages"))
+        XCTAssertTrue(desk.contains("beginWatchingGrant"))
+        XCTAssertTrue(desk.contains("didBecomeActiveNotification"))
+        XCTAssertTrue(desk.contains("ChatDB.openSettings()"))
+        XCTAssertFalse(desk.contains("PrimsDesktopXPC"))
+        XCTAssertFalse(client.contains("sqlite3_open"))
+        XCTAssertFalse(client.contains("ChatDB"))
+        XCTAssertFalse(litmus.contains("doctor_chatdb_inherits_app_fda"))
+        XCTAssertFalse(litmus.contains("doctor_json_on_pipe"))
+        XCTAssertTrue(litmus.contains("fda_prove_is_in_app_messages"))
+        let host = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/HostView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(host.contains("FDARequestSheet"))
+        XCTAssertTrue(host.contains("ProductIdentity.fdaNote"))
+        XCTAssertFalse(host.contains("LibrarySidebar"))
+        XCTAssertFalse(host.contains("RegistrySidebar"))
+    }
+
+    func testThreeDoorsAreViewerConnectorsChat() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let desk = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/DeskModel.swift"),
+            encoding: .utf8
+        )
+        let rail = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/UI/WorkRail.swift"),
+            encoding: .utf8
+        )
+        let stage = try String(
+            contentsOf: root.appendingPathComponent("Sources/PrimMac/UI/StageView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(desk.contains("enum DeskDoor"))
+        XCTAssertTrue(desk.contains("case viewer"))
+        XCTAssertTrue(desk.contains("case connectors"))
+        XCTAssertTrue(desk.contains("case chat"))
+        XCTAssertTrue(desk.contains("CaseIterable"))
+        XCTAssertEqual(
+            desk.components(separatedBy: "case ").filter { $0.hasPrefix("viewer") || $0.hasPrefix("connectors") || $0.hasPrefix("chat") }.count,
+            3,
+            "exactly three doors"
+        )
+        XCTAssertFalse(desk.contains("case messages"))
+        XCTAssertFalse(desk.contains("case paseo"))
+        XCTAssertFalse(desk.contains("case registry"))
+        XCTAssertFalse(desk.contains("case drive"))
+        XCTAssertTrue(rail.contains("ForEach(DeskDoor.allCases)"))
+        XCTAssertTrue(rail.contains("door.title"))
+        XCTAssertTrue(stage.contains("case .viewer:"))
+        XCTAssertTrue(stage.contains("case .connectors:"))
+        XCTAssertTrue(stage.contains("case .chat:"))
+        XCTAssertTrue(stage.contains("Messages live under Connectors"))
+        let transcriptRange = try XCTUnwrap(stage.range(of: "MessageTranscript"))
+        let chatCase = try XCTUnwrap(stage.range(of: "case .chat:"))
+        XCTAssertTrue(transcriptRange.lowerBound < chatCase.lowerBound || stage.contains("connectorsStage"))
+        XCTAssertFalse(stage.contains("case .messages"))
     }
 
     func testSourcesDoNotAskFDAForLooseCLI() throws {

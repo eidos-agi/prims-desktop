@@ -52,9 +52,11 @@ public enum HostUI: Sendable {
         return tool.as == "sim" || (tool.bin != nil && tool.as != "host" && !embedsInWeb(tool))
     }
 
-    /// Connector the signed host runs itself (chat.db). Reader is the app or Contents/Helpers.
+    /// Connector the signed host runs itself (chat.db). Reader is the LS app process.
     public static func isInHost(_ tool: PrimTool) -> Bool {
-        tool.as == "chatdb-sqlite" || tool.name == "imessage-chatdb-receive"
+        tool.as == "chatdb-sqlite"
+            || tool.name == "imessage-chatdb-receive"
+            || tool.name == "prims-connectors-imessage"
     }
 
     /// `*` cites every open pack (and the empty document). Do not seed a type for it.

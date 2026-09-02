@@ -1,7 +1,10 @@
 import AppKit
+import PrimMacCore
 import SwiftUI
 
-@main
+/// Human glass only. Process entry is `PrimDesktopMain`. Do not mark this
+/// type as the process entry and do not peek argv in `init()`.
+/// `NSApplication` starts in `PrimApp.main()`.
 struct PrimApp: App {
     @NSApplicationDelegateAdaptor(DeskAppDelegate.self) private var delegate
     @StateObject private var desk = DeskModel()
@@ -39,6 +42,7 @@ struct PrimApp: App {
     }
 }
 
+/// Glass. XPC is started in `PrimDesktopMain` before this runs.
 final class DeskAppDelegate: NSObject, NSApplicationDelegate {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { false }
 
@@ -47,6 +51,7 @@ final class DeskAppDelegate: NSObject, NSApplicationDelegate {
     func application(_ app: NSApplication, shouldSaveApplicationState coder: NSCoder) -> Bool { false }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        PrimsDesktopXPCHost.shared.start()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         for window in NSApp.windows where window.canBecomeMain {

@@ -13,34 +13,84 @@ struct StageView: View {
             Divider()
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            ComposerStub()
+            if desk.door == .chat {
+                ComposerStub()
+            }
         }
         .background(Color(nsColor: .textBackgroundColor))
-        .navigationTitle("Prims Desktop")
+        .navigationTitle(desk.door.title)
     }
 
     @ViewBuilder
     private var header: some View {
-        if let tool = desk.current {
-            HStack(spacing: 12) {
-                AccountAvatar(icon: ConnectorFace.icon(tool), on: true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(ConnectorFace.title(tool))
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(statusLine(tool))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+        HStack(spacing: 12) {
+            AccountAvatar(icon: headerIcon, on: true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(headerTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                Text(headerStatus)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(.bar)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(.bar)
+    }
+
+    private var headerIcon: String {
+        switch desk.door {
+        case .viewer: return DeskDoor.viewer.icon
+        case .chat: return DeskDoor.chat.icon
+        case .connectors:
+            if let tool = desk.current { return ConnectorFace.icon(tool) }
+            return DeskDoor.connectors.icon
+        }
+    }
+
+    private var headerTitle: String {
+        switch desk.door {
+        case .viewer: return "Viewer"
+        case .chat: return "Chat"
+        case .connectors:
+            if let tool = desk.current { return ConnectorFace.title(tool) }
+            return "Connectors"
+        }
+    }
+
+    private var headerStatus: String {
+        switch desk.door {
+        case .viewer: return "Open pack"
+        case .chat: return "Directs the open pack"
+        case .connectors:
+            if let tool = desk.current { return statusLine(tool) }
+            return "Mac connectors"
         }
     }
 
     @ViewBuilder
     private var content: some View {
+        switch desk.door {
+        case .viewer:
+            EmptyStage(
+                icon: DeskDoor.viewer.icon,
+                title: "Viewer",
+                detail: "Open a .prim pack. Double-click lands here."
+            )
+        case .connectors:
+            connectorsStage
+        case .chat:
+            EmptyStage(
+                icon: DeskDoor.chat.icon,
+                title: "Chat",
+                detail: "Chat directs the open pack. Messages live under Connectors."
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var connectorsStage: some View {
         if let tool = desk.current {
             if HostUI.isInHost(tool) {
                 iMessageStage
@@ -53,9 +103,9 @@ struct StageView: View {
             }
         } else {
             EmptyStage(
-                icon: "sparkles",
-                title: "Start here",
-                detail: "Choose an account in the rail. iMessage is ready on this Mac."
+                icon: "link",
+                title: "Connectors",
+                detail: "iMessage is the local Messages connector on this Mac."
             )
         }
     }

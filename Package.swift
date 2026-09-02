@@ -22,6 +22,8 @@ let package = Package(
             path: "Sources/PrimMacCore",
             linkerSettings: [
                 .linkedFramework("AppKit"),
+                .linkedFramework("Security"),
+                .linkedFramework("ServiceManagement"),
                 .linkedLibrary("sqlite3"),
             ]
         ),
@@ -48,6 +50,7 @@ let package = Package(
             path: "Sources/PrimsDesktopCLI",
             linkerSettings: [
                 .linkedFramework("AppKit"),
+                .linkedFramework("Security"),
                 .linkedLibrary("sqlite3"),
             ]
         ),

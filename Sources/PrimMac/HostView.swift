@@ -39,6 +39,7 @@ struct HostView: View {
         .sheet(isPresented: $desk.askFDA) {
             FDARequestSheet(onGrant: desk.grantFDA, onLater: { desk.askFDA = false })
         }
+        // TASK-0014: ChatDB.receive runs in this app process (DeskModel). Do not wait on XPC.
     }
 }
 
@@ -52,6 +53,7 @@ struct FDARequestSheet: View {
                 .font(.title2)
             Text(ProductIdentity.fdaNote)
                 .foregroundStyle(.secondary)
+                .textSelection(.enabled)
             HStack {
                 Button("Not now") { onLater() }
                 Spacer()

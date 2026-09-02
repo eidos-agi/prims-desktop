@@ -27,6 +27,14 @@ public enum DesktopCLI {
 
     public static let fdaNote = ProductIdentity.fdaNote
 
+    /// Every verb `invoke` implements. `ProcessEntry` uses this set — do not
+    /// keep a shorter allow-list that forgets `config`.
+    public static let commands: Set<String> = [
+        "connectors", "status", "receive", "open", "doctor", "asmp", "config", "help",
+    ]
+
+    public static let globalFlags: Set<String> = ["--json", "-h", "--help"]
+
     public static func run(_ args: [String]) -> Int32 {
         let result = invoke(args)
         if !result.stdout.isEmpty {
@@ -187,9 +195,17 @@ public enum DesktopCLI {
         let trampoline = ProductIdentity.trampolineURL()
         let trampolineExists = FileManager.default.isExecutableFile(atPath: trampoline.path)
         let trampolineIsScript = trampolineExists && !isMachO(trampoline)
+        let principal = principalURL()
+        let principalExists = FileManager.default.isExecutableFile(atPath: principal.path)
+        let principalTeam = principalExists ? teamIdentifier(for: principal) : nil
+        let principalIdentifier = principalExists ? codesignIdentifier(for: principal) : nil
+        let principalInfoPlist = principalExists ? codesignInfoPlist(for: principal) : nil
+        let principalDR = principalExists ? designatedRequirement(for: principal) : nil
         let helper = helperURL()
         let helperExists = FileManager.default.isExecutableFile(atPath: helper.path)
         let helperTeam = helperExists ? teamIdentifier(for: helper) : nil
+        let helperIdentifier = helperExists ? codesignIdentifier(for: helper) : nil
+        let helperDR = helperExists ? designatedRequirement(for: helper) : nil
         let chatdbHelper = ProductIdentity.chatdbHelperURL()
         let chatdbHelperExists = FileManager.default.isExecutableFile(atPath: chatdbHelper.path)
         let readable = ChatDB.health()
@@ -207,15 +223,26 @@ public enum DesktopCLI {
             "cli_exists": trampolineExists,
             "cli_is_trampoline": trampolineIsScript,
             "cli_team": "",
+            "principal": principal.path,
+            "principal_exists": principalExists,
+            "principal_identifier": principalIdentifier ?? "",
+            "principal_team": principalTeam ?? "",
+            "principal_info_plist": principalInfoPlist ?? "",
+            "principal_designated_requirement": principalDR ?? "",
+            "running": CommandLine.arguments[0],
             "helper": helper.path,
             "helper_exists": helperExists,
+            "helper_identifier": helperIdentifier ?? "",
             "helper_team": helperTeam ?? "",
+            "helper_designated_requirement": helperDR ?? "",
             "chatdb_helper": chatdbHelper.path,
             "chatdb_helper_exists": chatdbHelperExists,
             "chat_db": ChatDB.path,
             "chat_db_readable": readable,
             "fda": readable,
             "fda_note": fdaNote,
+            "tcc_reader": ProcessEntry.isLaunchServicesAppProcess() ? "app" : "denied",
+            "tcc_parent": ProcessEntry.parentProcessName() ?? "",
             "asmp": ASMP.json(asmp),
         ]
         if json {
@@ -228,6 +255,10 @@ public enum DesktopCLI {
             "identifier  \(ProductIdentity.bundleIdentifier)",
             "codesign    \(appTeam ?? "(unsigned / unknown)")",
             "trampoline  \(trampoline.path)\(trampolineExists ? (trampolineIsScript ? "  (script)" : "  (NOT a trampoline)") : "  (not installed)")",
+            "principal   \(principal.path)\(principalExists ? "" : "  (missing)")",
+            "principal id \(principalIdentifier ?? "(unsigned / unknown)")",
+            "tcc reader  \(ProcessEntry.isLaunchServicesAppProcess() ? "app" : "denied")",
+            "running     \(CommandLine.arguments[0])",
             "helper      \(helper.path)\(helperExists ? "" : "  (missing)")",
             "helper team \(helperTeam ?? "(unsigned / unknown)")",
             "chatdb helper  \(chatdbHelper.path)\(chatdbHelperExists ? "" : "  (missing)")",
@@ -493,14 +524,20 @@ public enum DesktopCLI {
         ProductIdentity.cliHelperURL()
     }
 
+    public static func principalURL() -> URL {
+        ProductIdentity.executableURL()
+    }
+
+    /// PATH target: trampoline script, then the XPC client helper.
+    /// Never spawn MacOS/Prim from a shell — that is TCC client_type 1.
     public static func cliURL() -> URL {
-        let helper = helperURL()
-        if FileManager.default.isExecutableFile(atPath: helper.path) {
-            return helper
-        }
         let trampoline = ProductIdentity.trampolineURL()
         if FileManager.default.isExecutableFile(atPath: trampoline.path) {
             return trampoline
+        }
+        let helper = helperURL()
+        if FileManager.default.isExecutableFile(atPath: helper.path) {
+            return helper
         }
         let argv0 = CommandLine.arguments[0]
         if argv0.hasPrefix("/") {
@@ -525,6 +562,62 @@ public enum DesktopCLI {
     }
 
     public static func teamIdentifier(for url: URL) -> String? {
+        codesignField("TeamIdentifier", for: url)
+    }
+
+    public static func codesignIdentifier(for url: URL) -> String? {
+        codesignField("Identifier", for: url)
+    }
+
+    public static func codesignInfoPlist(for url: URL) -> String? {
+        let text = codesignVerbose(for: url)
+        for line in text.split(separator: "\n") {
+            let s = String(line)
+            if s.hasPrefix("Info.plist=") {
+                return String(s.dropFirst("Info.plist=".count))
+            }
+        }
+        return nil
+    }
+
+    public static func designatedRequirement(for url: URL) -> String? {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        proc.arguments = ["-dr", "-", url.path]
+        let err = Pipe()
+        let out = Pipe()
+        proc.standardError = err
+        proc.standardOutput = out
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+        } catch {
+            return nil
+        }
+        let errText = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let outText = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let text = (errText + "\n" + outText)
+        for line in text.split(separator: "\n") {
+            let s = String(line).trimmingCharacters(in: .whitespaces)
+            if s.hasPrefix("designated =>") {
+                return String(s.dropFirst("designated =>".count)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+    }
+
+    private static func codesignField(_ key: String, for url: URL) -> String? {
+        let prefix = key + "="
+        for line in codesignVerbose(for: url).split(separator: "\n") {
+            if line.hasPrefix(prefix) {
+                let value = String(line.dropFirst(prefix.count))
+                return value == "not set" ? nil : value
+            }
+        }
+        return nil
+    }
+
+    private static func codesignVerbose(for url: URL) -> String {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
         proc.arguments = ["-dv", "--verbose=4", url.path]
@@ -535,15 +628,8 @@ public enum DesktopCLI {
             try proc.run()
             proc.waitUntilExit()
         } catch {
-            return nil
+            return ""
         }
-        let text = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        for line in text.split(separator: "\n") {
-            if line.hasPrefix("TeamIdentifier=") {
-                let value = String(line.dropFirst("TeamIdentifier=".count))
-                return value == "not set" ? nil : value
-            }
-        }
-        return nil
+        return String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
     }
 }
